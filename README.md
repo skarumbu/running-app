@@ -1,46 +1,108 @@
-# Getting Started with Create React App
+# Running App
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A personal running tracker PWA. GPS-based distance and pace tracking with per-user run history, route maps, distance charts, and badges.
 
-## Available Scripts
+**Stack:** React (TypeScript) · Azure Static Web Apps · Azure Functions (Python) · Azure PostgreSQL · Google Sign-In
 
-In the project directory, you can run:
+---
 
-### `npm start`
+## Local Development
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+```bash
+npm install
+npm start        # dev server at localhost:3000
+```
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+Fill in `.env` before starting (see [Secrets](#secrets) below). API calls (`/api/*`) won't work locally without also running Azure Functions:
 
-### `npm test`
+```bash
+cd api
+pip install -r requirements.txt
+func start       # requires Azure Functions Core Tools v4
+```
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+Fill in `api/local.settings.json` with your Postgres connection string first.
 
-### `npm run build`
+---
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## Secrets
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+Both files are gitignored and never committed.
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+### `api/local.settings.json` — Azure Functions
 
-### `npm run eject`
+```json
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "DATABASE_URL": "postgresql://runningadmin:password@localhost:5432/running_app"
+  }
+}
+```
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+---
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+## Deployment Setup (one-time)
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+### 1. Provision infrastructure via Bicep
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+From `azure-infrastructure/`:
 
-## Learn More
+```bash
+az deployment sub create \
+  --location eastus \
+  --template-file running-app.bicep \
+  --parameters postgresAdminPassword=<pass> googleClientId=<id> googleClientSecret=<secret> \
+               databaseUrl="postgresql://runningadmin:<pass>@running-app-db-prod.postgres.database.azure.com/running_app?sslmode=require"
+```
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+This creates resource group `running-app-prod-rg` containing:
+- Azure Static Web App (`running-app-prod`) linked to this repo
+- Azure Database for PostgreSQL Flexible Server (`running-app-db-prod`)
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+Azure automatically adds `AZURE_STATIC_WEB_APPS_API_TOKEN` as a GitHub Actions secret.
+
+### 2. Create a Google OAuth Client
+
+In [Google Cloud Console](https://console.cloud.google.com):
+- APIs & Services → Credentials → Create OAuth 2.0 Client ID → Web application
+- Authorized redirect URI: `https://<swa-url>/.auth/login/google/callback`
+- Save the **Client ID** and **Client Secret**
+
+### 3. Run the database schema
+
+```bash
+psql "$DATABASE_URL" -f api/schema.sql
+```
+
+### 4. Set Azure App Settings
+
+In Azure portal → running-app-prod (Static Web App) → Configuration:
+
+| Name | Value |
+|---|---|
+| `GOOGLE_CLIENT_ID` | OAuth client ID from step 2 |
+| `GOOGLE_CLIENT_SECRET` | OAuth client secret from step 2 |
+| `DATABASE_URL` | PostgreSQL connection string |
+
+### 5. Push to Deploy
+
+Any push to `main` triggers GitHub Actions and deploys frontend + API automatically.
+
+---
+
+## Installing on Your Phone
+
+**iOS (Safari):** Share → Add to Home Screen
+
+**Android (Chrome):** Menu → Add to Home Screen
+
+Keep the screen awake during runs for best GPS accuracy (iOS background PWA limitation).
+
+---
+
+## Database
+
+Schema lives in `api/schema.sql`. Run it once against the provisioned Postgres instance. Apply future changes manually.
