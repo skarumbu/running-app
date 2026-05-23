@@ -1,8 +1,6 @@
 -- Running App schema
 -- Run against the Azure PostgreSQL instance declared in azure-infrastructure/modules/runningapp.bicep
 
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-
 CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   google_id TEXT UNIQUE NOT NULL,
