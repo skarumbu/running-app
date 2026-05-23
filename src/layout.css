@@ -1,3 +1,47 @@
+.login-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  gap: 16px;
+  background: #1a5c52;
+  color: #fff;
+  padding: 32px;
+  text-align: center;
+}
+
+.login-title {
+  font-size: 48px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  margin: 0;
+}
+
+.login-subtitle {
+  font-size: 16px;
+  color: rgba(255,255,255,0.75);
+  margin: 0;
+}
+
+.login-btn {
+  margin-top: 16px;
+  background: #fff;
+  color: #1a5c52;
+  font-size: 16px;
+  font-weight: 600;
+  padding: 14px 32px;
+  border-radius: 50px;
+  text-decoration: none;
+  transition: opacity 0.15s;
+}
+.login-btn:hover { opacity: 0.9; }
+
+.login-loading {
+  font-size: 16px;
+  color: rgba(255,255,255,0.6);
+}
+
 .app-shell {
   display: flex;
   flex-direction: column;

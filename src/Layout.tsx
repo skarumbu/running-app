@@ -4,17 +4,31 @@ import { useAuth } from './AuthContext';
 import './layout.css';
 
 export default function Layout() {
-  const { user, signOut } = useAuth();
+  const { user, loading, signOut } = useAuth();
+
+  if (loading) {
+    return <div className="login-screen"><span className="login-loading">Loading…</span></div>;
+  }
+
+  if (!user) {
+    return (
+      <div className="login-screen">
+        <h1 className="login-title">Run</h1>
+        <p className="login-subtitle">Track your runs, see your progress.</p>
+        <a className="login-btn" href="/.auth/login/google?post_login_redirect_uri=/">
+          Sign in with Google
+        </a>
+      </div>
+    );
+  }
 
   return (
     <div className="app-shell">
       <header className="topbar">
         <span className="topbar-title">Run</span>
-        {user && (
-          <button className="signout-btn" onClick={signOut}>
-            {user.displayName || user.email}
-          </button>
-        )}
+        <button className="signout-btn" onClick={signOut}>
+          {user.displayName || user.email}
+        </button>
       </header>
 
       <main className="content">
