@@ -27,7 +27,7 @@ func start         # Requires Azure Functions Core Tools v4 + api/local.settings
 ## Architecture
 
 ### Frontend (`/src`)
-- **`AuthContext.tsx`** — Google OAuth via Azure SWA. Calls `GET /api/users/me` on load to auto-register new users and populate context.
+- **`AuthContext.tsx`** — Google Identity Services (GIS) client-side auth. Stores JWT in `sessionStorage`, sends it as `Authorization: Bearer` header. Calls `GET /api/users/me` on login to auto-register new users and populate context.
 - **`Layout.tsx`** — Bottom tab nav (Track, History, Profile) + topbar with sign-out
 - **`/modules/track/`** — GPS run tracker: start/pause/finish state machine, live metrics
 - **`/modules/history/`** — Run list, weekly distance chart (Recharts), per-run detail with Leaflet route map
@@ -37,7 +37,7 @@ func start         # Requires Azure Functions Core Tools v4 + api/local.settings
 - **`/hooks/useWakeLock.ts`** — Screen Wake Lock API (keeps screen on during run)
 
 ### API (`/api/function_app.py`)
-Python Azure Functions v2. Auth via `X-MS-CLIENT-PRINCIPAL` header (Azure SWA injects this). Any authenticated Google account is accepted; users are auto-registered on first request.
+Python Azure Functions v2. Auth via `Authorization: Bearer {google_id_token}` header. Token verified against `oauth2.googleapis.com/tokeninfo`. Any authenticated Google account is accepted; users are auto-registered on first request.
 
 | Route | Method | Purpose |
 |---|---|---|
@@ -64,4 +64,5 @@ GitHub Actions (`.github/workflows/deploy.yml`) auto-deploys on push to `main`:
 2. Azure Static Web Apps action deploys frontend + API together
 
 Required GitHub Secret: `AZURE_STATIC_WEB_APPS_API_TOKEN`  
-Required Azure App Settings: `DATABASE_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+Required Azure App Settings: `DATABASE_URL`, `GOOGLE_CLIENT_ID`  
+Required GitHub Secret (build): `REACT_APP_GOOGLE_CLIENT_ID`
