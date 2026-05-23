@@ -2,6 +2,7 @@ import json
 import os
 import base64
 import logging
+import urllib.request
 from datetime import datetime, timezone, timedelta
 
 import azure.functions as func
@@ -35,16 +36,21 @@ def err(msg, status=400):
 # ---------------------------------------------------------------------------
 
 def require_auth(req: func.HttpRequest):
-    """Return (google_id, email, display_name) from Azure SWA client principal, or None."""
-    header = req.headers.get("X-MS-CLIENT-PRINCIPAL")
-    if not header:
+    """Return (google_id, email, display_name) from Google Bearer JWT, or None."""
+    auth_header = req.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
         return None
+    token = auth_header[7:]
     try:
-        decoded = json.loads(base64.b64decode(header).decode("utf-8"))
-        claims = {c["typ"]: c["val"] for c in decoded.get("claims", [])}
-        google_id = claims.get("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier") or claims.get("sub")
-        email = claims.get("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress") or claims.get("emails")
-        display_name = claims.get("name") or claims.get("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name") or email
+        # Verify via Google tokeninfo endpoint (simple, no key management needed)
+        url = f"https://oauth2.googleapis.com/tokeninfo?id_token={token}"
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            claims = json.loads(resp.read().decode())
+        if claims.get("aud") != os.environ.get("GOOGLE_CLIENT_ID"):
+            return None
+        google_id = claims.get("sub")
+        email = claims.get("email")
+        display_name = claims.get("name") or email
         if not google_id or not email:
             return None
         return google_id, email, display_name

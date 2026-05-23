@@ -37,6 +37,10 @@
 }
 .login-btn:hover { opacity: 0.9; }
 
+.google-btn-container {
+  margin-top: 16px;
+}
+
 .login-loading {
   font-size: 16px;
   color: rgba(255,255,255,0.6);
