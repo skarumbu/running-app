@@ -174,7 +174,6 @@ export default function TrackTab() {
   const isPaused = phase === 'paused';
   const distKm = (gps.distanceMeters / 1000).toFixed(2);
   const pace = formatPace(gps.distanceMeters, timer.elapsedSeconds);
-  const kcal = Math.round(gps.distanceMeters / 1000 * 70);
 
   return (
     <div className="track-active">
@@ -204,8 +203,8 @@ export default function TrackTab() {
           <div className="stat-card-value">{kcal || '0'}</div>
         </div>
         <div className="stat-card">
-          <div className="stat-card-label">GPS accuracy</div>
-          <div className="stat-card-value">{gps.accuracy ? `${Math.round(gps.accuracy)}m` : '--'}</div>
+          <div className="stat-card-label">Calories</div>
+          <div className="stat-card-value">{Math.round(gps.distanceMeters / 1000 * 70) || '0'}</div>
         </div>
       </div>
 
