@@ -111,7 +111,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const apiFetch = useCallback((url: string, options: RequestInit = {}) => {
     const token = sessionStorage.getItem('run_google_token');
-    return fetch(url, {
+    const base = process.env.REACT_APP_API_URL || '';
+    return fetch(`${base}${url}`, {
       ...options,
       headers: {
         ...(options.headers || {}),
