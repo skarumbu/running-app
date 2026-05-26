@@ -93,7 +93,6 @@ export default function HistoryTab() {
           const d = new Date(run.started_at);
           const day = d.getDate();
           const weekday = d.toLocaleDateString('en-US', { weekday: 'short' });
-          const time = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
           return (
             <button key={run.id} className="run-card" onClick={() => navigate(`/history/${run.id}`)}>
               <div className="run-card-date">

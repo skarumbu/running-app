@@ -24,7 +24,7 @@ const ProfileIcon = () => (
 );
 
 export default function Layout() {
-  const { user, loading, signOut, googleBtnRef } = useAuth();
+  const { user, loading, googleBtnRef } = useAuth();
 
   if (loading) {
     return <div className="login-screen"><span className="login-loading">Loading…</span></div>;
