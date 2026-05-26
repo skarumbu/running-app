@@ -25,6 +25,7 @@ yarn-error.log*
 # Azure Functions local config (contains secrets)
 api/local.settings.json
 api/.python_packages/
+api/__pycache__/
 
 # Env files
 .env
