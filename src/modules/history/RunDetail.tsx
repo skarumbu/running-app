@@ -54,7 +54,7 @@ export default function RunDetail() {
       .then(setRun)
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, apiFetch]);
 
   if (loading) return <div className="history-state">Loading…</div>;
   if (error || !run) return <div className="history-state error-msg">Error: {error}</div>;

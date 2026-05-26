@@ -30,7 +30,7 @@ export default function ProfileTab() {
       .then(([b, s]) => { setBadges(b); setBests(s); })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [apiFetch]);
 
   function formatPace(secs: number | null): string {
     if (!secs) return '--';

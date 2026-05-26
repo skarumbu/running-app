@@ -42,7 +42,7 @@ export default function HistoryTab() {
       .then((data: Run[]) => setRuns(data))
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, []);
+  }, [apiFetch]);
 
   if (loading) return <div className="history-state">Loading…</div>;
   if (error) return <div className="history-state error-msg">Error: {error}</div>;
