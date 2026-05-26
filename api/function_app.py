@@ -8,8 +8,10 @@ from datetime import datetime, timezone, timedelta
 import azure.functions as func
 import psycopg2
 import psycopg2.extras
+from shared_logging import get_logger, log_request
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
+logger = get_logger("running-app")
 
 # ---------------------------------------------------------------------------
 # DB
@@ -133,6 +135,7 @@ def compute_and_upsert_badges(conn, user_id: str, run_id: str, distance_meters: 
 # ---------------------------------------------------------------------------
 
 @app.route(route="users/me", methods=["GET"])
+@log_request(logger)
 def get_me(req: func.HttpRequest) -> func.HttpResponse:
     identity = require_auth(req)
     if not identity:
@@ -149,6 +152,7 @@ def get_me(req: func.HttpRequest) -> func.HttpResponse:
 
 
 @app.route(route="runs", methods=["GET"])
+@log_request(logger)
 def list_runs(req: func.HttpRequest) -> func.HttpResponse:
     identity = require_auth(req)
     if not identity:
@@ -173,6 +177,7 @@ def list_runs(req: func.HttpRequest) -> func.HttpResponse:
 
 
 @app.route(route="runs/bests", methods=["GET"])
+@log_request(logger)
 def get_bests(req: func.HttpRequest) -> func.HttpResponse:
     identity = require_auth(req)
     if not identity:
@@ -199,6 +204,7 @@ def get_bests(req: func.HttpRequest) -> func.HttpResponse:
 
 
 @app.route(route="runs", methods=["POST"])
+@log_request(logger)
 def create_run(req: func.HttpRequest) -> func.HttpResponse:
     identity = require_auth(req)
     if not identity:
@@ -245,6 +251,7 @@ def create_run(req: func.HttpRequest) -> func.HttpResponse:
 
 
 @app.route(route="runs/{run_id}", methods=["GET"])
+@log_request(logger)
 def get_run(req: func.HttpRequest, run_id: str) -> func.HttpResponse:
     identity = require_auth(req)
     if not identity:
@@ -270,6 +277,7 @@ def get_run(req: func.HttpRequest, run_id: str) -> func.HttpResponse:
 
 
 @app.route(route="runs/{run_id}", methods=["DELETE"])
+@log_request(logger)
 def delete_run(req: func.HttpRequest, run_id: str) -> func.HttpResponse:
     identity = require_auth(req)
     if not identity:
@@ -292,6 +300,7 @@ def delete_run(req: func.HttpRequest, run_id: str) -> func.HttpResponse:
 
 
 @app.route(route="badges", methods=["GET"])
+@log_request(logger)
 def list_badges(req: func.HttpRequest) -> func.HttpResponse:
     identity = require_auth(req)
     if not identity:
