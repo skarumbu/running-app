@@ -18,6 +18,13 @@ jobs:
         with:
           node-version: '24'
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install API dependencies
+        run: pip install -r api/requirements.txt -t api/.python_packages/lib/site-packages
+
       - name: Install and build
         run: npm ci && npm run build
         env:
@@ -33,13 +40,6 @@ jobs:
           app_location: /
           output_location: build
           skip_api_build: true
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install API dependencies
-        run: pip install -r api/requirements.txt -t api/.python_packages/lib/site-packages
 
       - name: Deploy API to Azure Functions
         uses: Azure/functions-action@v1
