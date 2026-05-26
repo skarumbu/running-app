@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../AuthContext';
 import DistanceChart from './DistanceChart';
 import './history.css';
 
@@ -33,9 +34,10 @@ export default function HistoryTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { apiFetch } = useAuth();
 
   useEffect(() => {
-    fetch('/api/runs')
+    apiFetch('/api/runs')
       .then(r => { if (!r.ok) throw new Error(`${r.status}`); return r.json(); })
       .then((data: Run[]) => setRuns(data))
       .catch(e => setError(e.message))

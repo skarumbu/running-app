@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../AuthContext';
 import RouteMap from './RouteMap';
 import { Waypoint } from '../../hooks/useGPS';
 import './history.css';
@@ -42,12 +43,13 @@ function formatDuration(secs: number) {
 export default function RunDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { apiFetch } = useAuth();
   const [run, setRun] = useState<RunFull | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`/api/runs/${id}`)
+    apiFetch(`/api/runs/${id}`)
       .then(r => { if (!r.ok) throw new Error(`${r.status}`); return r.json(); })
       .then(setRun)
       .catch(e => setError(e.message))

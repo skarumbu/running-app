@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../AuthContext';
 import { useGPS } from '../../hooks/useGPS';
 import { useRunTimer } from '../../hooks/useRunTimer';
 import { useWakeLock } from '../../hooks/useWakeLock';
@@ -28,6 +29,7 @@ export default function TrackTab() {
   const [runName, setRunName] = useState('');
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  const { apiFetch } = useAuth();
   const gps = useGPS();
   const timer = useRunTimer();
   const wakeLock = useWakeLock();
@@ -62,7 +64,7 @@ export default function TrackTab() {
   const handleSave = async () => {
     setSaveError(null);
     try {
-      const res = await fetch('/api/runs', {
+      const res = await apiFetch('/api/runs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

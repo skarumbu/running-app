@@ -17,15 +17,15 @@ interface Bests {
 }
 
 export default function ProfileTab() {
-  const { user } = useAuth();
+  const { user, apiFetch } = useAuth();
   const [badges, setBadges] = useState<Badge[]>([]);
   const [bests, setBests] = useState<Bests | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/badges').then(r => r.json()),
-      fetch('/api/runs/bests').then(r => r.json()),
+      apiFetch('/api/badges').then(r => r.json()),
+      apiFetch('/api/runs/bests').then(r => r.json()),
     ])
       .then(([b, s]) => { setBadges(b); setBests(s); })
       .catch(() => {})

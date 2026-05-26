@@ -12,6 +12,7 @@ interface AuthContextValue {
   loading: boolean;
   signOut: () => void;
   googleBtnRef: React.RefObject<HTMLDivElement | null>;
+  apiFetch: (url: string, options?: RequestInit) => Promise<Response>;
 }
 
 function decodeJwtPayload(token: string): Record<string, unknown> {
@@ -29,6 +30,7 @@ const AuthContext = createContext<AuthContextValue>({
   loading: true,
   signOut: () => {},
   googleBtnRef: { current: null } as React.RefObject<HTMLDivElement | null>,
+  apiFetch: (url, options) => fetch(url, options),
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -107,13 +109,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user && !loading) initGoogleSignIn();
   }, [user, loading, googleBtnRef.current, initGoogleSignIn]); // eslint-disable-line
 
+  const apiFetch = useCallback((url: string, options: RequestInit = {}) => {
+    const token = sessionStorage.getItem('run_google_token');
+    return fetch(url, {
+      ...options,
+      headers: {
+        ...(options.headers || {}),
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+    });
+  }, []);
+
   const signOut = useCallback(() => {
     sessionStorage.removeItem('run_google_token');
     setUser(null);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, signOut, googleBtnRef }}>
+    <AuthContext.Provider value={{ user, loading, signOut, googleBtnRef, apiFetch }}>
       {children}
     </AuthContext.Provider>
   );
