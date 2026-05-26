@@ -29,6 +29,12 @@ function formatDuration(secs: number): string {
   return `${m}m ${s}s`;
 }
 
+const ChevronIcon = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+    <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+
 export default function HistoryTab() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,7 +51,7 @@ export default function HistoryTab() {
   }, [apiFetch]);
 
   if (loading) return <div className="history-state">Loading…</div>;
-  if (error) return <div className="history-state error-msg">Error: {error}</div>;
+  if (error) return <div className="history-state" style={{ color: '#E84545' }}>Error: {error}</div>;
   if (runs.length === 0) return (
     <div className="history-state">
       <p>No runs yet.</p>
@@ -53,32 +59,60 @@ export default function HistoryTab() {
     </div>
   );
 
+  const now = new Date();
+  const monthName = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const monthKm = runs.reduce((a, r) => a + r.distance_meters / 1000, 0);
+  const monthHours = (runs.reduce((a, r) => a + r.duration_seconds, 0) / 3600).toFixed(1);
+
   return (
     <div className="history-tab">
+      <div className="history-heading">
+        <div className="history-heading-date">{monthName}</div>
+        <div className="history-heading-title">History</div>
+      </div>
+
+      <div className="month-summary">
+        <div className="month-stat">
+          <div className="month-stat-value">{monthKm.toFixed(1)}</div>
+          <div className="month-stat-label">km</div>
+        </div>
+        <div className="month-stat">
+          <div className="month-stat-value">{runs.length}</div>
+          <div className="month-stat-label">Runs</div>
+        </div>
+        <div className="month-stat">
+          <div className="month-stat-value">{monthHours}</div>
+          <div className="month-stat-label">Hours</div>
+        </div>
+      </div>
+
       <DistanceChart runs={runs} />
 
       <div className="run-list">
-        {runs.map(run => (
-          <div key={run.id} className="run-card" onClick={() => navigate(`/history/${run.id}`)}>
-            <div className="run-card-header">
-              <span className="run-date">
-                {new Date(run.started_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-              </span>
-              {run.name && <span className="run-name">{run.name}</span>}
-            </div>
-            <div className="run-stats">
-              <span className="run-stat">
-                <strong>{(run.distance_meters / 1000).toFixed(2)}</strong> km
-              </span>
-              <span className="run-stat">
-                <strong>{formatDuration(run.duration_seconds)}</strong>
-              </span>
-              <span className="run-stat">
-                <strong>{formatPace(run.avg_pace_seconds_per_km)}</strong> /km
-              </span>
-            </div>
-          </div>
-        ))}
+        {runs.map(run => {
+          const d = new Date(run.started_at);
+          const day = d.getDate();
+          const weekday = d.toLocaleDateString('en-US', { weekday: 'short' });
+          const time = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+          return (
+            <button key={run.id} className="run-card" onClick={() => navigate(`/history/${run.id}`)}>
+              <div className="run-card-date">
+                <div className="run-card-day">{day}</div>
+                <div className="run-card-weekday">{weekday}</div>
+              </div>
+              <div className="run-card-body">
+                <div className="run-card-distance">
+                  {(run.distance_meters / 1000).toFixed(2)} <span>km</span>
+                </div>
+                <div className="run-card-meta">
+                  {formatDuration(run.duration_seconds)} · {formatPace(run.avg_pace_seconds_per_km)} /km
+                  {run.name ? ` · ${run.name}` : ''}
+                </div>
+              </div>
+              <div className="run-card-chevron"><ChevronIcon /></div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

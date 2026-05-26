@@ -1,53 +1,198 @@
-.profile-tab { padding: 16px; }
-
-.profile-header {
-  margin-bottom: 20px;
+.profile-tab {
+  padding: 28px 22px calc(env(safe-area-inset-bottom, 0px) + 80px);
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
 }
-.profile-name { font-size: 22px; font-weight: 700; color: #1a1a1a; }
+
+.profile-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding-top: 6px;
+}
+
+.profile-label {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.profile-name {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--text);
+  margin-top: 4px;
+  line-height: 1.1;
+}
+
+.profile-since {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.profile-settings-btn {
+  appearance: none;
+  background: var(--card);
+  border: 1px solid var(--line);
+  color: var(--text);
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Totals strip */
+.totals-strip {
+  background: var(--card);
+  border-radius: 18px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.total-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+  border-left: 1px solid var(--line);
+  padding: 0 8px;
+}
+.total-stat:first-child { border-left: none; }
+
+.total-stat-value {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 26px;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.total-stat-label {
+  font-family: var(--font-ui);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 700;
+  text-align: center;
+}
+
+/* Personal bests */
+.section-header {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 700;
+  margin-bottom: 10px;
+  padding-left: 2px;
+}
 
 .bests-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
-  margin-bottom: 20px;
 }
+
 .best-card {
-  background: #fff;
-  border-radius: 12px;
-  padding: 16px;
+  background: var(--card);
+  border-radius: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 4px;
 }
-.best-value { font-size: 22px; font-weight: 700; color: #1a1a1a; }
-.best-label { font-size: 12px; color: #888; text-transform: uppercase; }
 
-.badge-section { background: #fff; border-radius: 12px; padding: 16px; }
-.section-title {
-  font-size: 13px;
-  color: #888;
+.best-value {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+}
+
+.best-label {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin: 0 0 12px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+/* Badges */
+.badge-section {
+  background: var(--card);
+  border-radius: 18px;
+  padding: 18px;
+  border: 1px solid var(--line);
 }
 
 .badge-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
+  gap: 18px;
 }
+
 .badge-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 12px 8px;
-  border-radius: 10px;
+  gap: 8px;
+}
+.badge-item.locked { opacity: 0.32; }
+
+.badge-icon-box {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 20px;
+}
+.badge-icon-box.earned {
+  background: var(--primary);
+  color: var(--primary-ink);
+  box-shadow: 0 6px 16px rgba(255,90,54,0.3);
+}
+.badge-icon-box.locked-box {
+  background: var(--card2);
+  color: var(--text-muted);
+}
+
+.badge-label {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--text);
+  letter-spacing: 0.02em;
   text-align: center;
 }
-.badge-item.earned { background: #edf7f5; }
-.badge-item.locked { opacity: 0.35; }
-.badge-icon { font-size: 28px; }
-.badge-label { font-size: 12px; font-weight: 600; color: #333; }
-.badge-date { font-size: 10px; color: #888; }
+
+.badge-date {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  color: var(--text-muted);
+}

@@ -24,12 +24,30 @@ function formatPace(distanceMeters: number, elapsedSeconds: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+const PlayIcon = () => (
+  <svg viewBox="0 0 24 24" width="26" height="26"><path d="M8 5.5L19 12L8 18.5z" fill="currentColor"/></svg>
+);
+const PauseIcon = () => (
+  <svg viewBox="0 0 24 24" width="28" height="28">
+    <rect x="7" y="5.5" width="3.5" height="13" rx="1" fill="currentColor"/>
+    <rect x="13.5" y="5.5" width="3.5" height="13" rx="1" fill="currentColor"/>
+  </svg>
+);
+const StopIcon = () => (
+  <svg viewBox="0 0 24 24" width="22" height="22"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg>
+);
+const CheckIcon = () => (
+  <svg viewBox="0 0 24 24" width="14" height="14">
+    <path d="M5 12.5l4 4 10-10" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+
 export default function TrackTab() {
   const [phase, setPhase] = useState<RunState>('idle');
   const [runName, setRunName] = useState('');
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const { apiFetch } = useAuth();
+  const { user, apiFetch } = useAuth();
   const gps = useGPS();
   const timer = useRunTimer();
   const wakeLock = useWakeLock();
@@ -45,7 +63,6 @@ export default function TrackTab() {
   const handlePause = () => {
     setPhase('paused');
     timer.pause();
-    // GPS continues collecting so distance stays accurate
   };
 
   const handleResume = async () => {
@@ -92,64 +109,117 @@ export default function TrackTab() {
     setSaveError(null);
   };
 
-  return (
-    <div className="track-tab">
-      {phase === 'saving' ? (
-        <div className="save-panel">
-          <h2>Save run</h2>
-          <p className="save-summary">
-            {(gps.distanceMeters / 1000).toFixed(2)} km &nbsp;·&nbsp; {formatTime(timer.elapsedSeconds)}
-          </p>
-          <input
-            className="run-name-input"
-            type="text"
-            placeholder="Name this run (optional)"
-            value={runName}
-            onChange={e => setRunName(e.target.value)}
-          />
-          {saveError && <p className="error-msg">{saveError}</p>}
-          <button className="btn btn-primary" onClick={handleSave}>Save</button>
-          <button className="btn btn-ghost" onClick={handleDiscard}>Discard</button>
+  const now = new Date();
+  const greeting = now.getHours() < 12 ? 'Good morning' : now.getHours() < 18 ? 'Good afternoon' : 'Good evening';
+  const firstName = user?.displayName?.split(' ')[0] || 'Runner';
+  const dateStr = now.toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric' });
+
+  if (phase === 'saving') {
+    const distKm = (gps.distanceMeters / 1000).toFixed(2);
+    return (
+      <div className="save-panel">
+        <div className="save-panel-header">
+          <div className="save-panel-label"><CheckIcon /> Run complete</div>
+          <div className="save-panel-title">Nice work.</div>
         </div>
-      ) : (
-        <>
-          <div className="metrics">
-            <div className="metric-block">
-              <span className="metric-value">{formatTime(timer.elapsedSeconds)}</span>
-              <span className="metric-label">Time</span>
-            </div>
-            <div className="metric-block">
-              <span className="metric-value">{(gps.distanceMeters / 1000).toFixed(2)}</span>
-              <span className="metric-label">km</span>
-            </div>
-            <div className="metric-block">
-              <span className="metric-value">{formatPace(gps.distanceMeters, timer.elapsedSeconds)}</span>
-              <span className="metric-label">min/km</span>
-            </div>
-          </div>
 
-          {gps.acquiring && <p className="gps-status">Acquiring GPS…</p>}
-          {gps.error && <p className="gps-status error-msg">GPS: {gps.error}</p>}
-
-          <div className="controls">
-            {phase === 'idle' && (
-              <button className="btn btn-start" onClick={handleStart}>Start</button>
-            )}
-            {phase === 'running' && (
-              <>
-                <button className="btn btn-secondary" onClick={handlePause}>Pause</button>
-                <button className="btn btn-finish" onClick={handleFinish}>Finish</button>
-              </>
-            )}
-            {phase === 'paused' && (
-              <>
-                <button className="btn btn-primary" onClick={handleResume}>Resume</button>
-                <button className="btn btn-finish" onClick={handleFinish}>Finish</button>
-              </>
-            )}
+        <div className="save-panel-summary">
+          <div className="save-panel-stat">
+            <div className="save-panel-stat-value">{distKm}</div>
+            <div className="save-panel-stat-label">km</div>
           </div>
-        </>
-      )}
+          <div className="save-panel-stat">
+            <div className="save-panel-stat-value">{formatTime(timer.elapsedSeconds)}</div>
+            <div className="save-panel-stat-label">time</div>
+          </div>
+        </div>
+
+        <input
+          className="run-name-input"
+          type="text"
+          placeholder="Name this run (optional)"
+          value={runName}
+          onChange={e => setRunName(e.target.value)}
+        />
+
+        {saveError && <p className="save-error">{saveError}</p>}
+
+        <button className="save-btn" onClick={handleSave}>Save run</button>
+        <button className="discard-btn" onClick={handleDiscard}>Discard</button>
+      </div>
+    );
+  }
+
+  if (phase === 'idle') {
+    return (
+      <div className="track-idle">
+        <div>
+          <div className="track-greeting-date">{dateStr}</div>
+          <div className="track-greeting-name">{greeting},<br/>{firstName}.</div>
+        </div>
+
+        {gps.error && <p className="gps-status error">GPS: {gps.error}</p>}
+        {gps.acquiring && <p className="gps-status">Acquiring GPS…</p>}
+
+        <button className="track-start-btn" onClick={handleStart}>
+          <PlayIcon />
+          Start run
+        </button>
+        <div className="track-gps-hint">GPS · auto-pause on</div>
+      </div>
+    );
+  }
+
+  // running or paused
+  const isPaused = phase === 'paused';
+  const distKm = (gps.distanceMeters / 1000).toFixed(2);
+  const pace = formatPace(gps.distanceMeters, timer.elapsedSeconds);
+  const kcal = Math.round(gps.distanceMeters / 1000 * 70);
+
+  return (
+    <div className="track-active">
+      <div className="track-status-pill">
+        <div className={`track-status-dot ${isPaused ? 'paused' : ''}`} />
+        <div className={`track-status-label ${isPaused ? 'paused' : ''}`}>
+          {isPaused ? 'Paused' : 'Running'}
+        </div>
+      </div>
+
+      <div className="track-timer-section">
+        <div className="track-timer-label">Elapsed time</div>
+        <div className="track-timer-value">{formatTime(timer.elapsedSeconds)}</div>
+      </div>
+
+      <div className="track-stat-grid">
+        <div className="stat-card">
+          <div className="stat-card-label">Distance (km)</div>
+          <div className="stat-card-value accent">{distKm}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-card-label">Pace (min/km)</div>
+          <div className="stat-card-value">{pace}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-card-label">Calories</div>
+          <div className="stat-card-value">{kcal || '0'}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-card-label">GPS accuracy</div>
+          <div className="stat-card-value">{gps.accuracy ? `${Math.round(gps.accuracy)}m` : '--'}</div>
+        </div>
+      </div>
+
+      <div className="track-controls">
+        <button className="ctrl-btn" onClick={handleFinish}>
+          <StopIcon />
+        </button>
+        <button className="ctrl-btn-primary" onClick={isPaused ? handleResume : handlePause}>
+          {isPaused ? <PlayIcon /> : <PauseIcon />}
+        </button>
+        <button className="ctrl-btn" style={{ fontSize: 10, letterSpacing: '0.14em' }}>
+          Lap
+        </button>
+      </div>
     </div>
   );
 }

@@ -1,85 +1,48 @@
+/* ── Login ── */
 .login-screen {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   min-height: 100dvh;
-  gap: 16px;
-  background: #1a5c52;
-  color: #fff;
-  padding: 32px;
+  gap: 20px;
+  background: var(--bg);
+  color: var(--text);
+  padding: 40px 32px;
   text-align: center;
 }
 
 .login-title {
-  font-size: 48px;
+  font-family: var(--font-display);
+  font-size: 56px;
   font-weight: 800;
-  letter-spacing: 2px;
+  letter-spacing: -0.04em;
+  color: var(--primary);
   margin: 0;
 }
 
 .login-subtitle {
-  font-size: 16px;
-  color: rgba(255,255,255,0.75);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  color: var(--text-muted);
   margin: 0;
+  letter-spacing: 0.01em;
 }
 
-.login-btn {
-  margin-top: 16px;
-  background: #fff;
-  color: #1a5c52;
-  font-size: 16px;
-  font-weight: 600;
-  padding: 14px 32px;
-  border-radius: 50px;
-  text-decoration: none;
-  transition: opacity 0.15s;
-}
-.login-btn:hover { opacity: 0.9; }
-
-.google-btn-container {
-  margin-top: 16px;
-}
+.google-btn-container { margin-top: 8px; }
 
 .login-loading {
-  font-size: 16px;
-  color: rgba(255,255,255,0.6);
+  font-size: 14px;
+  color: var(--text-muted);
 }
 
+/* ── App shell ── */
 .app-shell {
   display: flex;
   flex-direction: column;
   height: 100dvh;
-  background: #f5f5f5;
+  background: var(--bg);
 }
-
-.topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
-  height: 52px;
-  background: #1a5c52;
-  color: #fff;
-  flex-shrink: 0;
-}
-
-.topbar-title {
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: 1px;
-}
-
-.signout-btn {
-  background: none;
-  border: none;
-  color: rgba(255,255,255,0.85);
-  font-size: 13px;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
-}
-.signout-btn:hover { background: rgba(255,255,255,0.15); }
 
 .content {
   flex: 1;
@@ -87,13 +50,13 @@
   -webkit-overflow-scrolling: touch;
 }
 
+/* ── Bottom tab bar ── */
 .tab-bar {
   display: flex;
-  border-top: 1px solid #ddd;
-  background: #fff;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
   flex-shrink: 0;
-  height: 56px;
-  padding-bottom: env(safe-area-inset-bottom);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .tab {
@@ -102,12 +65,27 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 3px;
   text-decoration: none;
-  color: #888;
-  font-size: 11px;
+  color: var(--text-muted);
+  padding: 8px 0;
   transition: color 0.15s;
+  border: none;
+  background: transparent;
 }
-.tab.active { color: #1a5c52; }
-.tab-icon { font-size: 20px; }
-.tab-label { font-size: 11px; }
+.tab.active { color: var(--primary); }
+
+.tab-icon {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tab-label {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
