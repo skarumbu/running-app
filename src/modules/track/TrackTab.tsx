@@ -200,10 +200,6 @@ export default function TrackTab() {
         </div>
         <div className="stat-card">
           <div className="stat-card-label">Calories</div>
-          <div className="stat-card-value">{kcal || '0'}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-card-label">Calories</div>
           <div className="stat-card-value">{Math.round(gps.distanceMeters / 1000 * 70) || '0'}</div>
         </div>
       </div>
