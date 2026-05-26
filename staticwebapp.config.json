@@ -1,6 +1,6 @@
 {
   "navigationFallback": {
     "rewrite": "/index.html",
-    "exclude": ["/static/*", "/*.{png,jpg,gif,ico,svg,webp,woff,woff2}"]
+    "exclude": ["/api/*", "/static/*", "/*.{png,jpg,gif,ico,svg,webp,woff,woff2}"]
   }
 }
