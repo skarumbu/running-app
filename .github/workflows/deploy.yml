@@ -31,6 +31,14 @@ jobs:
           CI: false
           REACT_APP_GOOGLE_CLIENT_ID: ${{ secrets.REACT_APP_GOOGLE_CLIENT_ID }}
 
+      - name: Deploy API to Azure Functions
+        uses: Azure/functions-action@v1
+        with:
+          app-name: running-app-prod-api
+          package: api
+          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
+          scm-do-build-during-deployment: false
+
       - name: Deploy frontend to Azure Static Web Apps
         uses: Azure/static-web-apps-deploy@v1
         with:
@@ -40,14 +48,6 @@ jobs:
           app_location: /
           output_location: build
           skip_api_build: true
-
-      - name: Deploy API to Azure Functions
-        uses: Azure/functions-action@v1
-        with:
-          app-name: running-app-prod-api
-          package: api
-          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
-          scm-do-build-during-deployment: false
 
   close_pull_request:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
