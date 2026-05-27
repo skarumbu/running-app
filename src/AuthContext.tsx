@@ -44,7 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const payload = decodeJwtPayload(token);
     // Register/fetch user from API
     try {
-      const res = await fetch('/api/users/me', {
+      const res = await fetch(`${process.env.REACT_APP_API_URL || ''}/api/users/me`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
       const data = res.ok ? await res.json() : null;

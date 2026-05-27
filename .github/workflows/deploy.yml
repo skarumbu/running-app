@@ -24,9 +24,8 @@ jobs:
 
       - name: Install API dependencies
         run: |
-          pip install -r api/requirements.txt -t api/.python_packages/lib/site-packages
-          cp -r api/.python_packages/lib/site-packages/shared_logging api/shared_logging
-          cp -r api/.python_packages/lib/site-packages/psycopg2 api/psycopg2
+          pip install psycopg2-binary -t api/ --no-deps
+          pip install "git+https://github.com/skarumbu/shared-logging.git@master#subdirectory=python" -t api/ --no-deps
 
       - name: Install and build
         run: npm ci && npm run build
