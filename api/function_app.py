@@ -1,17 +1,44 @@
 import json
 import os
+import sys
 import base64
 import logging
 import urllib.request
 from datetime import datetime, timezone, timedelta
 
 import azure.functions as func
-import psycopg2
-import psycopg2.extras
-from shared_logging import get_logger, log_request
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
-logger = get_logger("running-app")
+
+_import_errors = {}
+try:
+    import psycopg2
+    import psycopg2.extras
+except Exception as e:
+    _import_errors["psycopg2"] = str(e)
+
+try:
+    from shared_logging import get_logger, log_request
+    logger = get_logger("running-app")
+except Exception as e:
+    _import_errors["shared_logging"] = str(e)
+    logger = logging.getLogger("running-app")
+    import functools
+    def log_request(l):
+        def decorator(fn):
+            @functools.wraps(fn)
+            def wrapper(req, *args, **kwargs):
+                return fn(req, *args, **kwargs)
+            return wrapper
+        return decorator
+
+
+@app.route(route="health", methods=["GET"])
+def health(req: func.HttpRequest) -> func.HttpResponse:
+    return func.HttpResponse(
+        json.dumps({"status": "ok", "import_errors": _import_errors, "sys_path": sys.path[:5], "pythonpath": os.environ.get("PYTHONPATH", "NOT SET")}),
+        mimetype="application/json"
+    )
 
 # ---------------------------------------------------------------------------
 # DB
