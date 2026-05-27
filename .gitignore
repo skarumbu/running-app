@@ -27,6 +27,7 @@ api/local.settings.json
 api/.python_packages/
 api/__pycache__/
 api/shared_logging/
+api/psycopg2/
 
 # Env files
 .env

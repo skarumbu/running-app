@@ -26,6 +26,7 @@ jobs:
         run: |
           pip install -r api/requirements.txt -t api/.python_packages/lib/site-packages
           cp -r api/.python_packages/lib/site-packages/shared_logging api/shared_logging
+          cp -r api/.python_packages/lib/site-packages/psycopg2 api/psycopg2
 
       - name: Install and build
         run: npm ci && npm run build
