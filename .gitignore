@@ -26,6 +26,7 @@ yarn-error.log*
 api/local.settings.json
 api/.python_packages/
 api/__pycache__/
+api/shared_logging/
 
 # Env files
 .env

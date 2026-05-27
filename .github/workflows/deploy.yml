@@ -23,7 +23,9 @@ jobs:
           python-version: '3.11'
 
       - name: Install API dependencies
-        run: pip install -r api/requirements.txt -t api/.python_packages/lib/site-packages
+        run: |
+          pip install -r api/requirements.txt -t api/.python_packages/lib/site-packages
+          cp -r api/.python_packages/lib/site-packages/shared_logging api/shared_logging
 
       - name: Install and build
         run: npm ci && npm run build
