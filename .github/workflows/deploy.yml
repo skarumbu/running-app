@@ -24,9 +24,7 @@ jobs:
 
       - name: Install API dependencies
         run: |
-          pip install pg8000 -t api/ --no-deps
-          pip install scramp -t api/ --no-deps
-          pip install asn1crypto -t api/ --no-deps
+          pip install pg8000 -t api/
           pip install "git+https://github.com/skarumbu/shared-logging.git@master#subdirectory=python" -t api/ --no-deps
 
       - name: Install and build
