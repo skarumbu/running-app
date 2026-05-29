@@ -48,9 +48,6 @@ jobs:
         working-directory: api
         run: func azure functionapp publish running-app-prod-api --python --no-build
 
-      - name: Restart function app to pick up new package
-        run: az functionapp restart --name running-app-prod-api --resource-group running-app-prod-rg
-
       - name: Deploy frontend to Azure Static Web Apps
         uses: Azure/static-web-apps-deploy@v1
         with:
