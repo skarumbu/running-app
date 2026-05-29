@@ -7,11 +7,36 @@ from urllib.parse import urlparse
 from datetime import datetime, timezone, timedelta
 
 import azure.functions as func
-import pg8000.dbapi
-from shared_logging import get_logger, log_request
+
+_diag = {}
+
+try:
+    import pg8000.dbapi
+except Exception as _e:
+    _diag["pg8000"] = str(_e)
+
+try:
+    from shared_logging import get_logger, log_request
+    logger = get_logger("running-app")
+except Exception as _e:
+    _diag["shared_logging"] = str(_e)
+    logger = logging.getLogger("running-app")
+    def log_request(_logger):
+        def _dec(f):
+            return f
+        return _dec
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
-logger = get_logger("running-app")
+
+
+@app.route(route="health", methods=["GET"])
+def health(req: func.HttpRequest) -> func.HttpResponse:
+    import sys
+    return func.HttpResponse(
+        json.dumps({"errors": _diag, "sys_path": sys.path[:8]}),
+        status_code=200,
+        mimetype="application/json",
+    )
 
 # ---------------------------------------------------------------------------
 # DB
