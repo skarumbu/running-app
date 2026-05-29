@@ -28,6 +28,10 @@ api/.python_packages/
 api/__pycache__/
 api/shared_logging/
 api/psycopg2/
+api/pg8000/
+api/scramp/
+api/asn1crypto/
+api/*.dist-info/
 
 # Env files
 .env

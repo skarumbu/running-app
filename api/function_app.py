@@ -1,47 +1,44 @@
 import json
 import os
-import sys
-import base64
+import ssl
 import logging
 import urllib.request
+from urllib.parse import urlparse
 from datetime import datetime, timezone, timedelta
 
 import azure.functions as func
+import pg8000.dbapi
+from shared_logging import get_logger, log_request
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
-
-_errors: dict = {}
-try:
-    import psycopg2
-    import psycopg2.extras
-except Exception as e:
-    _errors["psycopg2"] = str(e)
-
-try:
-    from shared_logging import get_logger, log_request
-    logger = get_logger("running-app")
-except Exception as e:
-    _errors["shared_logging"] = str(e)
-    logger = logging.getLogger("running-app")
-    import functools
-    def log_request(l):
-        def decorator(fn):
-            @functools.wraps(fn)
-            def wrapper(req, *args, **kwargs): return fn(req, *args, **kwargs)
-            return wrapper
-        return decorator
-
-
-@app.route(route="health", methods=["GET"])
-def health(req: func.HttpRequest) -> func.HttpResponse:
-    return func.HttpResponse(json.dumps({"errors": _errors, "sys_path": sys.path[:6]}), mimetype="application/json")
+logger = get_logger("running-app")
 
 # ---------------------------------------------------------------------------
 # DB
 # ---------------------------------------------------------------------------
 
 def get_conn():
-    return psycopg2.connect(os.environ["DATABASE_URL"], cursor_factory=psycopg2.extras.RealDictCursor)
+    url = urlparse(os.environ["DATABASE_URL"])
+    ssl_ctx = ssl.create_default_context()
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = ssl.CERT_NONE
+    conn = pg8000.dbapi.connect(
+        host=url.hostname,
+        database=url.path.lstrip("/"),
+        user=url.username,
+        password=url.password,
+        port=url.port or 5432,
+        ssl_context=ssl_ctx,
+    )
+    return conn
+
+
+def _row(cur, row):
+    return {d[0]: v for d, v in zip(cur.description, row)} if row else None
+
+
+def _rows(cur):
+    return [{d[0]: v for d, v in zip(cur.description, row)} for row in cur.fetchall()]
 
 
 def json_response(data, status=200):
@@ -61,13 +58,11 @@ def err(msg, status=400):
 # ---------------------------------------------------------------------------
 
 def require_auth(req: func.HttpRequest):
-    """Return (google_id, email, display_name) from Google Bearer JWT, or None."""
     auth_header = req.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         return None
     token = auth_header[7:]
     try:
-        # Verify via Google tokeninfo endpoint (simple, no key management needed)
         url = f"https://oauth2.googleapis.com/tokeninfo?id_token={token}"
         with urllib.request.urlopen(url, timeout=5) as resp:
             claims = json.loads(resp.read().decode())
@@ -84,17 +79,20 @@ def require_auth(req: func.HttpRequest):
 
 
 def get_or_create_user(conn, google_id: str, email: str, display_name: str) -> dict:
-    with conn.cursor() as cur:
-        cur.execute("SELECT * FROM users WHERE google_id = %s", (google_id,))
-        row = cur.fetchone()
-        if row:
-            return dict(row)
-        cur.execute(
-            "INSERT INTO users (google_id, email, display_name) VALUES (%s, %s, %s) RETURNING *",
-            (google_id, email, display_name),
-        )
-        conn.commit()
-        return dict(cur.fetchone())
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM users WHERE google_id = %s", (google_id,))
+    row = _row(cur, cur.fetchone())
+    if row:
+        cur.close()
+        return row
+    cur.execute(
+        "INSERT INTO users (google_id, email, display_name) VALUES (%s, %s, %s) RETURNING *",
+        (google_id, email, display_name),
+    )
+    conn.commit()
+    row = _row(cur, cur.fetchone())
+    cur.close()
+    return row
 
 
 # ---------------------------------------------------------------------------
@@ -111,45 +109,43 @@ BADGE_RULES = [
 
 def compute_and_upsert_badges(conn, user_id: str, run_id: str, distance_meters: float) -> list[str]:
     earned = []
-    with conn.cursor() as cur:
-        # first_run badge
-        cur.execute("SELECT COUNT(*) AS cnt FROM runs WHERE user_id = %s", (user_id,))
-        if cur.fetchone()["cnt"] == 1:
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) AS cnt FROM runs WHERE user_id = %s", (user_id,))
+    if cur.fetchone()[0] == 1:
+        cur.execute(
+            "INSERT INTO badges (user_id, badge_type, run_id) VALUES (%s, 'first_run', %s) ON CONFLICT DO NOTHING RETURNING badge_type",
+            (user_id, run_id),
+        )
+        if cur.fetchone():
+            earned.append("first_run")
+
+    for badge_type, check in BADGE_RULES:
+        if check(distance_meters):
             cur.execute(
-                "INSERT INTO badges (user_id, badge_type, run_id) VALUES (%s, 'first_run', %s) ON CONFLICT DO NOTHING RETURNING badge_type",
+                "INSERT INTO badges (user_id, badge_type, run_id) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING RETURNING badge_type",
+                (user_id, badge_type, run_id),
+            )
+            if cur.fetchone():
+                earned.append(badge_type)
+
+    cur.execute(
+        "SELECT DISTINCT DATE(started_at AT TIME ZONE 'UTC') AS run_date FROM runs WHERE user_id = %s ORDER BY run_date DESC LIMIT 7",
+        (user_id,),
+    )
+    dates = [r[0] for r in cur.fetchall()]
+    if len(dates) >= 7:
+        today = datetime.now(timezone.utc).date()
+        streak = all((today - timedelta(days=i)) in dates for i in range(7))
+        if streak:
+            cur.execute(
+                "INSERT INTO badges (user_id, badge_type, run_id) VALUES (%s, 'longest_streak', %s) ON CONFLICT DO NOTHING RETURNING badge_type",
                 (user_id, run_id),
             )
             if cur.fetchone():
-                earned.append("first_run")
+                earned.append("longest_streak")
 
-        # distance badges
-        for badge_type, check in BADGE_RULES:
-            if check(distance_meters):
-                cur.execute(
-                    "INSERT INTO badges (user_id, badge_type, run_id) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING RETURNING badge_type",
-                    (user_id, badge_type, run_id),
-                )
-                if cur.fetchone():
-                    earned.append(badge_type)
-
-        # 7-day streak badge
-        cur.execute(
-            "SELECT DISTINCT DATE(started_at AT TIME ZONE 'UTC') AS run_date FROM runs WHERE user_id = %s ORDER BY run_date DESC LIMIT 7",
-            (user_id,),
-        )
-        dates = [r["run_date"] for r in cur.fetchall()]
-        if len(dates) >= 7:
-            today = datetime.now(timezone.utc).date()
-            streak = all((today - timedelta(days=i)) in dates for i in range(7))
-            if streak:
-                cur.execute(
-                    "INSERT INTO badges (user_id, badge_type, run_id) VALUES (%s, 'longest_streak', %s) ON CONFLICT DO NOTHING RETURNING badge_type",
-                    (user_id, run_id),
-                )
-                if cur.fetchone():
-                    earned.append("longest_streak")
-
-        conn.commit()
+    conn.commit()
+    cur.close()
     return earned
 
 
@@ -184,14 +180,15 @@ def list_runs(req: func.HttpRequest) -> func.HttpResponse:
     try:
         conn = get_conn()
         user = get_or_create_user(conn, google_id, email, display_name)
-        with conn.cursor() as cur:
-            cur.execute(
-                """SELECT id, started_at, ended_at, distance_meters, duration_seconds,
-                          avg_pace_seconds_per_km, name
-                   FROM runs WHERE user_id = %s ORDER BY started_at DESC""",
-                (user["id"],),
-            )
-            rows = [dict(r) for r in cur.fetchall()]
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT id, started_at, ended_at, distance_meters, duration_seconds,
+                      avg_pace_seconds_per_km, name
+               FROM runs WHERE user_id = %s ORDER BY started_at DESC""",
+            (user["id"],),
+        )
+        rows = _rows(cur)
+        cur.close()
         conn.close()
         return json_response(rows)
     except Exception as e:
@@ -209,16 +206,17 @@ def get_bests(req: func.HttpRequest) -> func.HttpResponse:
     try:
         conn = get_conn()
         user = get_or_create_user(conn, google_id, email, display_name)
-        with conn.cursor() as cur:
-            cur.execute(
-                """SELECT COUNT(*) AS total_runs,
-                          COALESCE(SUM(distance_meters) / 1000.0, 0) AS total_km,
-                          MIN(avg_pace_seconds_per_km) AS best_pace_seconds_per_km,
-                          MAX(distance_meters) AS longest_run_meters
-                   FROM runs WHERE user_id = %s""",
-                (user["id"],),
-            )
-            row = dict(cur.fetchone())
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT COUNT(*) AS total_runs,
+                      COALESCE(SUM(distance_meters) / 1000.0, 0) AS total_km,
+                      MIN(avg_pace_seconds_per_km) AS best_pace_seconds_per_km,
+                      MAX(distance_meters) AS longest_run_meters
+               FROM runs WHERE user_id = %s""",
+            (user["id"],),
+        )
+        row = _row(cur, cur.fetchone())
+        cur.close()
         conn.close()
         return json_response(row)
     except Exception as e:
@@ -253,16 +251,16 @@ def create_run(req: func.HttpRequest) -> func.HttpResponse:
     try:
         conn = get_conn()
         user = get_or_create_user(conn, google_id, email, display_name)
-        with conn.cursor() as cur:
-            cur.execute(
-                """INSERT INTO runs (user_id, started_at, ended_at, distance_meters, duration_seconds,
-                                     avg_pace_seconds_per_km, name, waypoints)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING *""",
-                (user["id"], started_at, now, distance, duration, avg_pace, name, json.dumps(waypoints)),
-            )
-            run = dict(cur.fetchone())
-            conn.commit()
-
+        cur = conn.cursor()
+        cur.execute(
+            """INSERT INTO runs (user_id, started_at, ended_at, distance_meters, duration_seconds,
+                                 avg_pace_seconds_per_km, name, waypoints)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING *""",
+            (user["id"], started_at, now, distance, duration, avg_pace, name, json.dumps(waypoints)),
+        )
+        run = _row(cur, cur.fetchone())
+        conn.commit()
+        cur.close()
         badges_earned = compute_and_upsert_badges(conn, user["id"], run["id"], distance)
         run["badges_earned"] = badges_earned
         run["waypoints"] = waypoints
@@ -279,19 +277,20 @@ def get_run(req: func.HttpRequest, run_id: str) -> func.HttpResponse:
     identity = require_auth(req)
     if not identity:
         return err("Unauthorized", 401)
-    google_id, _, display_name = identity
+    google_id, email, display_name = identity
     try:
         conn = get_conn()
-        user = get_or_create_user(conn, google_id, identity[1], display_name)
-        with conn.cursor() as cur:
-            cur.execute("SELECT * FROM runs WHERE id = %s AND user_id = %s", (run_id, user["id"]))
-            row = cur.fetchone()
-            if not row:
-                conn.close()
-                return err("Not found", 404)
-            run = dict(row)
-            cur.execute("SELECT badge_type FROM badges WHERE run_id = %s", (run_id,))
-            run["badges_earned"] = [r["badge_type"] for r in cur.fetchall()]
+        user = get_or_create_user(conn, google_id, email, display_name)
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM runs WHERE id = %s AND user_id = %s", (run_id, user["id"]))
+        run = _row(cur, cur.fetchone())
+        if not run:
+            cur.close()
+            conn.close()
+            return err("Not found", 404)
+        cur.execute("SELECT badge_type FROM badges WHERE run_id = %s", (run_id,))
+        run["badges_earned"] = [r[0] for r in cur.fetchall()]
+        cur.close()
         conn.close()
         return json_response(run)
     except Exception as e:
@@ -309,12 +308,14 @@ def delete_run(req: func.HttpRequest, run_id: str) -> func.HttpResponse:
     try:
         conn = get_conn()
         user = get_or_create_user(conn, google_id, email, display_name)
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM runs WHERE id = %s AND user_id = %s RETURNING id", (run_id, user["id"]))
-            if not cur.fetchone():
-                conn.close()
-                return err("Not found", 404)
-            conn.commit()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM runs WHERE id = %s AND user_id = %s RETURNING id", (run_id, user["id"]))
+        if not cur.fetchone():
+            cur.close()
+            conn.close()
+            return err("Not found", 404)
+        conn.commit()
+        cur.close()
         conn.close()
         return func.HttpResponse(status_code=204)
     except Exception as e:
@@ -332,12 +333,13 @@ def list_badges(req: func.HttpRequest) -> func.HttpResponse:
     try:
         conn = get_conn()
         user = get_or_create_user(conn, google_id, email, display_name)
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT badge_type, earned_at, run_id FROM badges WHERE user_id = %s ORDER BY earned_at",
-                (user["id"],),
-            )
-            rows = [dict(r) for r in cur.fetchall()]
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT badge_type, earned_at, run_id FROM badges WHERE user_id = %s ORDER BY earned_at",
+            (user["id"],),
+        )
+        rows = _rows(cur)
+        cur.close()
         conn.close()
         return json_response(rows)
     except Exception as e:
