@@ -40,7 +40,7 @@ jobs:
         run: |
           CONN=$(az functionapp config appsettings list --name running-app-prod-api --resource-group running-app-prod-rg --query "[?name=='WEBSITE_CONTENTAZUREFILECONNECTIONSTRING'].value" -o tsv)
           SHARE=$(az functionapp config appsettings list --name running-app-prod-api --resource-group running-app-prod-rg --query "[?name=='WEBSITE_CONTENTSHARE'].value" -o tsv)
-          az storage file upload-batch --destination "$SHARE/site/wwwroot" --source api/ --connection-string "$CONN" --overwrite
+          az storage file upload-batch --destination "$SHARE/site/wwwroot" --source api/ --connection-string "$CONN"
           az functionapp restart --name running-app-prod-api --resource-group running-app-prod-rg
 
       - name: Deploy frontend to Azure Static Web Apps
