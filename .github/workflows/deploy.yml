@@ -33,11 +33,6 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y azure-functions-core-tools-4
 
-      - name: Install API dependencies
-        run: |
-          pip install pg8000 -t api/.python_packages/lib/site-packages/
-          pip install "git+https://github.com/skarumbu/shared-logging.git@master#subdirectory=python" -t api/.python_packages/lib/site-packages/ --no-deps
-
       - name: Install and build
         run: npm ci && npm run build
         env:
@@ -46,7 +41,7 @@ jobs:
 
       - name: Deploy API
         working-directory: api
-        run: func azure functionapp publish running-app-prod-api --python --no-build
+        run: func azure functionapp publish running-app-prod-api --python --build local
 
       - name: Deploy frontend to Azure Static Web Apps
         uses: Azure/static-web-apps-deploy@v1
