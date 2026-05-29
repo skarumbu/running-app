@@ -27,6 +27,7 @@ jobs:
 
       - name: Install API dependencies
         run: |
+          pip install azure-functions -t api/
           pip install pg8000 -t api/
           pip install "git+https://github.com/skarumbu/shared-logging.git@master#subdirectory=python" -t api/ --no-deps
 
