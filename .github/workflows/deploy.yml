@@ -25,6 +25,9 @@ jobs:
       - name: Azure login
         run: az login --service-principal -u ${{ secrets.AZURE_CLIENT_ID }} -p ${{ secrets.AZURE_CLIENT_SECRET }} --tenant ${{ secrets.AZURE_TENANT_ID }} && az account set --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Install Azure Functions Core Tools
+        run: npm install -g azure-functions-core-tools@4 --unsafe-perm true
+
       - name: Install API dependencies
         run: |
           pip install pg8000 -t api/.python_packages/lib/site-packages/
@@ -36,12 +39,9 @@ jobs:
           CI: false
           REACT_APP_GOOGLE_CLIENT_ID: ${{ secrets.REACT_APP_GOOGLE_CLIENT_ID }}
 
-      - name: Deploy API to Azure Files
-        run: |
-          CONN=$(az functionapp config appsettings list --name running-app-prod-api --resource-group running-app-prod-rg --query "[?name=='WEBSITE_CONTENTAZUREFILECONNECTIONSTRING'].value" -o tsv)
-          SHARE=$(az functionapp config appsettings list --name running-app-prod-api --resource-group running-app-prod-rg --query "[?name=='WEBSITE_CONTENTSHARE'].value" -o tsv)
-          az storage file upload-batch --destination "$SHARE/site/wwwroot" --source api/ --connection-string "$CONN"
-          az functionapp restart --name running-app-prod-api --resource-group running-app-prod-rg
+      - name: Deploy API
+        working-directory: api
+        run: func azure functionapp publish running-app-prod-api --python --no-build
 
       - name: Deploy frontend to Azure Static Web Apps
         uses: Azure/static-web-apps-deploy@v1
