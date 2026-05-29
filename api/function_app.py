@@ -1,3 +1,4 @@
+import sys
 import json
 import os
 import ssl
@@ -6,23 +7,31 @@ import urllib.request
 from urllib.parse import urlparse
 from datetime import datetime, timezone, timedelta
 
+# Ensure our bundled packages are on the path regardless of PYTHONPATH
+_pkg_path = '/home/site/wwwroot/.python_packages/lib/site-packages'
+if _pkg_path not in sys.path:
+    sys.path.insert(0, _pkg_path)
+
 import azure.functions as func
-import pg8000.dbapi
 
-logger = logging.getLogger("running-app")
+_diag = {}
 
-
-def log_request(_logger):
-    def _dec(f):
-        return f
-    return _dec
+try:
+    import pg8000.dbapi
+except Exception as _e:
+    _diag["pg8000"] = str(_e)
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
 
-# ---------------------------------------------------------------------------
-# DB
-# ---------------------------------------------------------------------------
+@app.route(route="health")
+def health(req: func.HttpRequest) -> func.HttpResponse:
+    return func.HttpResponse(
+        json.dumps({"errors": _diag, "sys_path": sys.path[:10]}),
+        status_code=200,
+        mimetype="application/json",
+    )
+
 
 def get_conn():
     url = urlparse(os.environ["DATABASE_URL"])
@@ -60,10 +69,6 @@ def err(msg, status=400):
     return func.HttpResponse(json.dumps({"error": msg}), status_code=status, mimetype="application/json")
 
 
-# ---------------------------------------------------------------------------
-# Auth
-# ---------------------------------------------------------------------------
-
 def require_auth(req: func.HttpRequest):
     auth_header = req.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
@@ -85,7 +90,7 @@ def require_auth(req: func.HttpRequest):
         return None
 
 
-def get_or_create_user(conn, google_id: str, email: str, display_name: str) -> dict:
+def get_or_create_user(conn, google_id, email, display_name):
     cur = conn.cursor()
     cur.execute("SELECT * FROM users WHERE google_id = %s", (google_id,))
     row = _row(cur, cur.fetchone())
@@ -102,10 +107,6 @@ def get_or_create_user(conn, google_id: str, email: str, display_name: str) -> d
     return row
 
 
-# ---------------------------------------------------------------------------
-# Badge logic
-# ---------------------------------------------------------------------------
-
 BADGE_RULES = [
     ("5k",  lambda dist: dist >= 5000),
     ("10k", lambda dist: dist >= 10000),
@@ -114,7 +115,7 @@ BADGE_RULES = [
 ]
 
 
-def compute_and_upsert_badges(conn, user_id: str, run_id: str, distance_meters: float) -> list[str]:
+def compute_and_upsert_badges(conn, user_id, run_id, distance_meters):
     earned = []
     cur = conn.cursor()
     cur.execute("SELECT COUNT(*) AS cnt FROM runs WHERE user_id = %s", (user_id,))
@@ -125,7 +126,6 @@ def compute_and_upsert_badges(conn, user_id: str, run_id: str, distance_meters: 
         )
         if cur.fetchone():
             earned.append("first_run")
-
     for badge_type, check in BADGE_RULES:
         if check(distance_meters):
             cur.execute(
@@ -134,7 +134,6 @@ def compute_and_upsert_badges(conn, user_id: str, run_id: str, distance_meters: 
             )
             if cur.fetchone():
                 earned.append(badge_type)
-
     cur.execute(
         "SELECT DISTINCT DATE(started_at AT TIME ZONE 'UTC') AS run_date FROM runs WHERE user_id = %s ORDER BY run_date DESC LIMIT 7",
         (user_id,),
@@ -150,18 +149,12 @@ def compute_and_upsert_badges(conn, user_id: str, run_id: str, distance_meters: 
             )
             if cur.fetchone():
                 earned.append("longest_streak")
-
     conn.commit()
     cur.close()
     return earned
 
 
-# ---------------------------------------------------------------------------
-# Routes
-# ---------------------------------------------------------------------------
-
 @app.route(route="users/me", methods=["GET"])
-@log_request(logger)
 def get_me(req: func.HttpRequest) -> func.HttpResponse:
     identity = require_auth(req)
     if not identity:
@@ -178,7 +171,6 @@ def get_me(req: func.HttpRequest) -> func.HttpResponse:
 
 
 @app.route(route="runs", methods=["GET"])
-@log_request(logger)
 def list_runs(req: func.HttpRequest) -> func.HttpResponse:
     identity = require_auth(req)
     if not identity:
@@ -189,9 +181,7 @@ def list_runs(req: func.HttpRequest) -> func.HttpResponse:
         user = get_or_create_user(conn, google_id, email, display_name)
         cur = conn.cursor()
         cur.execute(
-            """SELECT id, started_at, ended_at, distance_meters, duration_seconds,
-                      avg_pace_seconds_per_km, name
-               FROM runs WHERE user_id = %s ORDER BY started_at DESC""",
+            "SELECT id, started_at, ended_at, distance_meters, duration_seconds, avg_pace_seconds_per_km, name FROM runs WHERE user_id = %s ORDER BY started_at DESC",
             (user["id"],),
         )
         rows = _rows(cur)
@@ -204,7 +194,6 @@ def list_runs(req: func.HttpRequest) -> func.HttpResponse:
 
 
 @app.route(route="runs/bests", methods=["GET"])
-@log_request(logger)
 def get_bests(req: func.HttpRequest) -> func.HttpResponse:
     identity = require_auth(req)
     if not identity:
@@ -215,11 +204,7 @@ def get_bests(req: func.HttpRequest) -> func.HttpResponse:
         user = get_or_create_user(conn, google_id, email, display_name)
         cur = conn.cursor()
         cur.execute(
-            """SELECT COUNT(*) AS total_runs,
-                      COALESCE(SUM(distance_meters) / 1000.0, 0) AS total_km,
-                      MIN(avg_pace_seconds_per_km) AS best_pace_seconds_per_km,
-                      MAX(distance_meters) AS longest_run_meters
-               FROM runs WHERE user_id = %s""",
+            "SELECT COUNT(*) AS total_runs, COALESCE(SUM(distance_meters)/1000.0,0) AS total_km, MIN(avg_pace_seconds_per_km) AS best_pace_seconds_per_km, MAX(distance_meters) AS longest_run_meters FROM runs WHERE user_id = %s",
             (user["id"],),
         )
         row = _row(cur, cur.fetchone())
@@ -232,7 +217,6 @@ def get_bests(req: func.HttpRequest) -> func.HttpResponse:
 
 
 @app.route(route="runs", methods=["POST"])
-@log_request(logger)
 def create_run(req: func.HttpRequest) -> func.HttpResponse:
     identity = require_auth(req)
     if not identity:
@@ -242,27 +226,21 @@ def create_run(req: func.HttpRequest) -> func.HttpResponse:
         body = req.get_json()
     except Exception:
         return err("Invalid JSON")
-
     distance = body.get("distance_meters", 0)
     duration = body.get("duration_seconds", 0)
     waypoints = body.get("waypoints", [])
     name = body.get("name")
-
     if distance <= 0 or duration <= 0:
         return err("distance_meters and duration_seconds required")
-
     avg_pace = duration / (distance / 1000) if distance > 0 else None
     now = datetime.now(timezone.utc)
     started_at = now - timedelta(seconds=duration)
-
     try:
         conn = get_conn()
         user = get_or_create_user(conn, google_id, email, display_name)
         cur = conn.cursor()
         cur.execute(
-            """INSERT INTO runs (user_id, started_at, ended_at, distance_meters, duration_seconds,
-                                 avg_pace_seconds_per_km, name, waypoints)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING *""",
+            "INSERT INTO runs (user_id, started_at, ended_at, distance_meters, duration_seconds, avg_pace_seconds_per_km, name, waypoints) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING *",
             (user["id"], started_at, now, distance, duration, avg_pace, name, json.dumps(waypoints)),
         )
         run = _row(cur, cur.fetchone())
@@ -279,7 +257,6 @@ def create_run(req: func.HttpRequest) -> func.HttpResponse:
 
 
 @app.route(route="runs/{run_id}", methods=["GET"])
-@log_request(logger)
 def get_run(req: func.HttpRequest, run_id: str) -> func.HttpResponse:
     identity = require_auth(req)
     if not identity:
@@ -306,7 +283,6 @@ def get_run(req: func.HttpRequest, run_id: str) -> func.HttpResponse:
 
 
 @app.route(route="runs/{run_id}", methods=["DELETE"])
-@log_request(logger)
 def delete_run(req: func.HttpRequest, run_id: str) -> func.HttpResponse:
     identity = require_auth(req)
     if not identity:
@@ -331,7 +307,6 @@ def delete_run(req: func.HttpRequest, run_id: str) -> func.HttpResponse:
 
 
 @app.route(route="badges", methods=["GET"])
-@log_request(logger)
 def list_badges(req: func.HttpRequest) -> func.HttpResponse:
     identity = require_auth(req)
     if not identity:
