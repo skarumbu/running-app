@@ -213,7 +213,8 @@ def create_run(req: func.HttpRequest) -> func.HttpResponse:
 
 
 @app.route(route="runs/{run_id}", methods=["GET"])
-def get_run(req: func.HttpRequest, run_id: str) -> func.HttpResponse:
+def get_run(req: func.HttpRequest) -> func.HttpResponse:
+    run_id = req.route_params.get("run_id")
     identity = require_auth(req)
     if not identity:
         return err("Unauthorized", 401)
@@ -239,7 +240,8 @@ def get_run(req: func.HttpRequest, run_id: str) -> func.HttpResponse:
 
 
 @app.route(route="runs/{run_id}", methods=["DELETE"])
-def delete_run(req: func.HttpRequest, run_id: str) -> func.HttpResponse:
+def delete_run(req: func.HttpRequest) -> func.HttpResponse:
+    run_id = req.route_params.get("run_id")
     identity = require_auth(req)
     if not identity:
         return err("Unauthorized", 401)
