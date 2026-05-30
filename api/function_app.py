@@ -8,26 +8,26 @@ from datetime import datetime, timezone, timedelta
 
 import azure.functions as func
 
-_diag = {}
-try:
-    import pg8000.dbapi
-except Exception as _e:
-    _diag["pg8000"] = str(_e)
-
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
 
 @app.route(route="health")
 def health(req: func.HttpRequest) -> func.HttpResponse:
     import sys
+    diag = {}
+    try:
+        import pg8000.dbapi  # noqa: F401
+    except Exception as e:
+        diag["pg8000"] = str(e)
     return func.HttpResponse(
-        json.dumps({"errors": _diag, "sys_path": sys.path[:8]}),
+        json.dumps({"errors": diag, "sys_path": sys.path[:8]}),
         status_code=200,
         mimetype="application/json",
     )
 
 
 def get_conn():
+    import pg8000.dbapi
     url = urlparse(os.environ["DATABASE_URL"])
     ssl_ctx = ssl.create_default_context()
     ssl_ctx.check_hostname = False
