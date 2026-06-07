@@ -63,11 +63,13 @@ export default function TrackTab() {
   const handlePause = () => {
     setPhase('paused');
     timer.pause();
+    gps.stop();
   };
 
   const handleResume = async () => {
     setPhase('running');
     timer.resume();
+    gps.start();
     await wakeLock.acquire();
   };
 
@@ -155,17 +157,17 @@ export default function TrackTab() {
       <div className="track-idle">
         <div>
           <div className="track-greeting-date">{dateStr}</div>
-          <div className="track-greeting-name">{greeting},<br/>{firstName}.</div>
+          <div className="track-greeting-name">{greeting},<br />{firstName}.</div>
         </div>
 
         {gps.error && <p className="gps-status error">GPS: {gps.error}</p>}
-        {gps.acquiring && <p className="gps-status">Acquiring GPS…</p>}
+        {gps.acquiring && <p className="gps-status">Acquiring GPS</p>}
 
         <button className="track-start-btn" onClick={handleStart}>
           <PlayIcon />
           Start run
         </button>
-        <div className="track-gps-hint">GPS · auto-pause on</div>
+        <div className="track-gps-hint">GPS auto-pause on</div>
       </div>
     );
   }
