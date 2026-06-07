@@ -4,6 +4,7 @@ import { useAuth } from '../../AuthContext';
 import { useGPS } from '../../hooks/useGPS';
 import { useRunTimer } from '../../hooks/useRunTimer';
 import { useWakeLock } from '../../hooks/useWakeLock';
+import TrackMap from './TrackMap';
 import './track.css';
 
 type RunState = 'idle' | 'running' | 'paused' | 'saving';
@@ -161,6 +162,8 @@ export default function TrackTab() {
           </div>
         </div>
 
+        <TrackMap waypoints={gps.waypoints} />
+
         <input
           className="run-name-input"
           type="text"
@@ -186,7 +189,7 @@ export default function TrackTab() {
         </div>
 
         {gps.error && <p className="gps-status error">GPS: {gps.error}</p>}
-        {gps.acquiring && <p className="gps-status">Acquiring GPS</p>}
+        {gps.acquiring && <p className="gps-status">Acquiring GPS</p>}
 
         <button className="track-start-btn" onClick={handleStart}>
           <PlayIcon />
@@ -240,6 +243,8 @@ export default function TrackTab() {
       >
         {nextUnitLabel}
       </button>
+
+      <TrackMap waypoints={gps.waypoints} />
 
       <div className="track-controls">
         <button className="ctrl-btn" onClick={handleFinish}>
