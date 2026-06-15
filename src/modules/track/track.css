@@ -226,7 +226,7 @@
   border-radius: 999px;
   padding: 3px;
   width: fit-content;
-  margin: 16px auto 0;
+  margin: 16px auto 12px;
   gap: 2px;
 }
 
