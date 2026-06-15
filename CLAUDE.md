@@ -57,6 +57,45 @@ Badge types: `first_run`, `5k`, `10k`, `21k`, `42k`, `longest_streak`. Computed 
 ### Infrastructure
 All Azure resources declared in `azure-infrastructure/modules/runningapp.bicep` and deployed via `azure-infrastructure/running-app.bicep`. **Do not create Azure resources lazily in Python code.**
 
+## Design System
+
+Dark-only app. All colours and fonts come from CSS variables defined in `src/index.css` — never hardcode hex values or font names.
+
+### Colour tokens
+| Token | Value | Use |
+|---|---|---|
+| `--bg` | `#0E0E10` | Page background |
+| `--surface` | `#17171A` | Slightly elevated surface |
+| `--card` | `#1F1F23` | Cards, inputs, toggles |
+| `--card2` | `#28282E` | Nested card / hover state |
+| `--line` | `rgba(255,255,255,0.07)` | Subtle dividers and borders |
+| `--line-strong` | `rgba(255,255,255,0.12)` | More visible borders |
+| `--text` | `#F6F4EF` | Primary text |
+| `--text-muted` | `#8A8A8E` | Secondary / label text |
+| `--text-faint` | `#555558` | Placeholder / disabled text |
+| `--primary` | `#FF5A36` | Orange accent — CTAs, active states |
+| `--primary-ink` | `#FFFFFF` | Text on primary-coloured backgrounds |
+
+### Typography tokens
+- `--font-display` — Archivo, used for headings and large UI text
+- `--font-ui` — Archivo, used for labels, buttons, body
+- `--font-mono` — JetBrains Mono, used for numeric metrics (time, distance, pace)
+
+### Patterns to follow
+- **Buttons** — always use `appearance: none; border: none;` and apply explicit styles. Never ship an unstyled `<button>`.
+- **Primary action buttons** — full-width, `height: 60–72px`, `border-radius: 16–20px`, `background: var(--primary)`, `color: var(--primary-ink)`, bold Archivo.
+- **Icon/control buttons** — circular (`border-radius: 999px`), `border: 1.5px solid var(--line-strong)`, transparent background.
+- **Segmented/toggle controls** — pill container (`background: var(--card)`, `border: 1px solid var(--line)`, `border-radius: 999px`, `padding: 3px`). Active segment gets `background: var(--primary); color: var(--primary-ink)`.
+- **Cards** — `background: var(--card)`, `border: 1px solid var(--line)`, `border-radius: 16px`, padding `14–20px`.
+- **Labels** — `font-family: var(--font-ui)`, `font-size: 10–11px`, `letter-spacing: 0.14–0.22em`, `text-transform: uppercase`, `font-weight: 600–700`, `color: var(--text-muted)`.
+- **Numeric values** — `font-family: var(--font-mono)`, `font-variant-numeric: tabular-nums`.
+- **Status pills** — `background: var(--card)`, `border: 1px solid var(--line)`, `border-radius: 999px`, small uppercase label inside.
+- **Spacing** — page padding `22–24px` horizontal. Gap between sections `20–28px`.
+- **No hardcoded colours** — if you need a one-off (e.g. error red), use `#E84545` to stay consistent with existing usage.
+
+### CSS organisation
+Each module has its own `.css` file co-located with its `.tsx`. Add new classes to the relevant module file, not to `index.css`. Read the existing `.css` file before adding styles to understand the existing class names and avoid duplication.
+
 ## Deployment
 
 GitHub Actions (`.github/workflows/deploy.yml`) auto-deploys on push to `main`:
