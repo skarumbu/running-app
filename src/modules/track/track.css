@@ -217,6 +217,39 @@
 }
 .ctrl-btn-primary:active { opacity: 0.88; }
 
+/* ── Unit toggle ── */
+.unit-toggle {
+  display: flex;
+  align-items: center;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px;
+  width: fit-content;
+  margin: 16px auto 0;
+  gap: 2px;
+}
+
+.unit-toggle-opt {
+  appearance: none;
+  border: none;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  padding: 5px 14px;
+  border-radius: 999px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.unit-toggle-opt.active {
+  background: var(--primary);
+  color: var(--primary-ink);
+}
+
 /* GPS status */
 .gps-status {
   font-family: var(--font-ui);

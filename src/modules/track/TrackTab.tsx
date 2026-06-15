@@ -204,7 +204,6 @@ export default function TrackTab() {
   const isPaused = phase === 'paused';
   const distStr = convertDistance(gps.distanceMeters, unit);
   const unitLabel = unit === 'km' ? 'km' : 'mi';
-  const nextUnitLabel = unit === 'km' ? 'mi' : 'km';
   const pace = formatPace(gps.distanceMeters, timer.elapsedSeconds, unit);
 
   return (
@@ -236,13 +235,10 @@ export default function TrackTab() {
         </div>
       </div>
 
-      <button
-        className="unit-toggle-btn"
-        onClick={toggleUnit}
-        title={`Switch to ${nextUnitLabel}`}
-      >
-        {nextUnitLabel}
-      </button>
+      <div className="unit-toggle">
+        <button className={`unit-toggle-opt${unit === 'km' ? ' active' : ''}`} onClick={() => setUnit('km')}>KM</button>
+        <button className={`unit-toggle-opt${unit === 'miles' ? ' active' : ''}`} onClick={() => setUnit('miles')}>MI</button>
+      </div>
 
       <TrackMap waypoints={gps.waypoints} />
 
