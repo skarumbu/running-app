@@ -74,10 +74,6 @@ export default function TrackTab() {
     }
   }, [unit]);
 
-  const toggleUnit = () => {
-    setUnit(u => (u === 'km' ? 'miles' : 'km'));
-  };
-
   const handleStart = async () => {
     setPhase('running');
     gps.start();
