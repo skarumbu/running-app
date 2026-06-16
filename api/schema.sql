@@ -9,8 +9,20 @@ CREATE TABLE users (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
+CREATE TABLE run_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+  started_at TIMESTAMPTZ NOT NULL,
+  ended_at TIMESTAMPTZ NOT NULL,
+  name TEXT
+);
+
+CREATE INDEX idx_run_sessions_user_id ON run_sessions(user_id);
+CREATE INDEX idx_run_sessions_started_at ON run_sessions(started_at DESC);
+
 CREATE TABLE runs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID REFERENCES run_sessions(id) ON DELETE CASCADE,
   user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
   started_at TIMESTAMPTZ NOT NULL,
   ended_at TIMESTAMPTZ NOT NULL,
@@ -23,6 +35,7 @@ CREATE TABLE runs (
 
 CREATE INDEX idx_runs_user_id ON runs(user_id);
 CREATE INDEX idx_runs_started_at ON runs(started_at DESC);
+CREATE INDEX idx_runs_session_id ON runs(session_id);
 
 CREATE TABLE badges (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
