@@ -1,0 +1,60 @@
+name: Build iOS App
+
+# Manual trigger only — this consumes macOS runner minutes, so it doesn't
+# run on every push. Trigger it from the Actions tab when you want a new
+# .ipa to sideload via AltStore.
+on:
+  workflow_dispatch:
+
+jobs:
+  build_ios:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web app
+        run: npm run build
+        env:
+          CI: false
+          REACT_APP_GOOGLE_CLIENT_ID: ${{ secrets.REACT_APP_GOOGLE_CLIENT_ID }}
+          REACT_APP_API_URL: https://running-app-prod-api.azurewebsites.net
+
+      - name: Sync Capacitor iOS project
+        run: npx cap sync ios
+
+      # Unsigned build — AltStore/AltServer re-signs the .ipa locally with
+      # your free Apple ID at install time, so CI doesn't need Apple
+      # developer credentials at all.
+      - name: Build unsigned .app
+        working-directory: ios/App
+        run: |
+          xcodebuild -workspace App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Package as .ipa
+        working-directory: ios/App
+        run: |
+          mkdir -p Payload
+          cp -r build/Build/Products/Release-iphoneos/App.app Payload/
+          zip -r RunningApp.ipa Payload
+
+      - name: Upload .ipa artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RunningApp-ipa
+          path: ios/App/RunningApp.ipa
+          retention-days: 14
