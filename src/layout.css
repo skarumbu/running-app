@@ -31,6 +31,21 @@
 
 .google-btn-container { margin-top: 8px; }
 
+.google-btn-native {
+  appearance: none;
+  border: none;
+  margin-top: 8px;
+  width: 100%;
+  max-width: 280px;
+  height: 60px;
+  border-radius: 18px;
+  background: var(--primary);
+  color: var(--primary-ink);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  font-weight: 700;
+}
+
 .login-loading {
   font-size: 14px;
   color: var(--text-muted);

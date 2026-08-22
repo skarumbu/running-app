@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { GoogleAuth } from '@southdevs/capacitor-google-auth';
 
 export interface User {
   id: string;
@@ -12,6 +14,7 @@ interface AuthContextValue {
   loading: boolean;
   signOut: () => void;
   googleBtnRef: React.RefObject<HTMLDivElement | null>;
+  signInNative: () => void;
   apiFetch: (url: string, options?: RequestInit) => Promise<Response>;
 }
 
@@ -30,6 +33,7 @@ const AuthContext = createContext<AuthContextValue>({
   loading: true,
   signOut: () => {},
   googleBtnRef: { current: null } as React.RefObject<HTMLDivElement | null>,
+  signInNative: () => {},
   apiFetch: (url, options) => fetch(url, options),
 });
 
@@ -90,9 +94,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []); // eslint-disable-line
 
-  // Load GIS script when not authed
+  const isNative = Capacitor.isNativePlatform();
+
+  // Web (PWA): load the Google Identity Services script and render its button.
+  // Native (Capacitor iOS wrapper): GIS's web button doesn't work from a
+  // capacitor://localhost origin, so we use the native Google Sign-In SDK
+  // instead — see signInNative below.
   useEffect(() => {
-    if (user || loading) return;
+    if (isNative || user || loading) return;
     const g = (window as any).google;
     if (g?.accounts) { initGoogleSignIn(); return; }
     const existing = document.querySelector('script[src*="accounts.google.com/gsi/client"]');
@@ -102,12 +111,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     script.async = true; script.defer = true;
     script.onload = initGoogleSignIn;
     document.head.appendChild(script);
-  }, [user, loading, initGoogleSignIn]);
+  }, [isNative, user, loading, initGoogleSignIn]);
 
-  // Re-render button when ref becomes available
+  // Re-render button when ref becomes available (web only)
   useEffect(() => {
-    if (!user && !loading) initGoogleSignIn();
-  }, [user, loading, googleBtnRef.current, initGoogleSignIn]); // eslint-disable-line
+    if (!isNative && !user && !loading) initGoogleSignIn();
+  }, [isNative, user, loading, googleBtnRef.current, initGoogleSignIn]); // eslint-disable-line
+
+  useEffect(() => {
+    if (!isNative) return;
+    GoogleAuth.initialize();
+  }, [isNative]);
+
+  const signInNative = useCallback(() => {
+    GoogleAuth.signIn({ scopes: ['profile', 'email'] }).then((result) => {
+      handleCredentialResponse({ credential: result.authentication.idToken });
+    });
+  }, [handleCredentialResponse]);
 
   const apiFetch = useCallback((url: string, options: RequestInit = {}) => {
     const token = sessionStorage.getItem('run_google_token');
@@ -127,7 +147,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, signOut, googleBtnRef, apiFetch }}>
+    <AuthContext.Provider value={{ user, loading, signOut, googleBtnRef, signInNative, apiFetch }}>
       {children}
     </AuthContext.Provider>
   );
