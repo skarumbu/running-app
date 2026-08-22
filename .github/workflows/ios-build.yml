@@ -1,8 +1,8 @@
 name: Build iOS App
 
-# Manual trigger only — this consumes macOS runner minutes, so it doesn't
-# run on every push. Trigger it from the Actions tab when you want a new
-# .ipa to sideload via AltStore.
+# Manual trigger only — a fresh .ipa is only useful when you're actually
+# about to sideload it, not on every commit. Trigger it from the Actions
+# tab when you want a new build to install via AltStore.
 on:
   workflow_dispatch:
 
