@@ -28,6 +28,8 @@ jobs:
 
       - name: Sync Capacitor iOS project
         run: npx cap sync ios
+        env:
+          REACT_APP_GOOGLE_IOS_CLIENT_ID: ${{ secrets.REACT_APP_GOOGLE_IOS_CLIENT_ID }}
 
       # Unsigned build — AltStore/AltServer re-signs the .ipa locally with
       # your free Apple ID at install time, so CI doesn't need Apple
@@ -43,6 +45,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
+            GOOGLE_IOS_REVERSED_CLIENT_ID="${{ secrets.GOOGLE_IOS_REVERSED_CLIENT_ID }}" \
             build
 
       - name: Package as .ipa

@@ -1,4 +1,10 @@
 import { useState, useRef, useCallback } from 'react';
+import { Capacitor, registerPlugin } from '@capacitor/core';
+import type { BackgroundGeolocationPlugin, Location as BGLocation } from '@capacitor-community/background-geolocation';
+
+// This plugin ships no JS entry point of its own — registerPlugin() is the
+// documented way to bind it. See its README for this exact pattern.
+const BackgroundGeolocation = registerPlugin<BackgroundGeolocationPlugin>('BackgroundGeolocation');
 
 export interface Waypoint {
   lat: number;
@@ -37,12 +43,65 @@ export function useGPS() {
     acquiring: false,
   });
 
-  const watchIdRef = useRef<number | null>(null);
+  const watchIdRef = useRef<number | null>(null); // web watchPosition id
+  const nativeWatcherIdRef = useRef<string | null>(null); // native plugin watcher id
   const waypointsRef = useRef<Waypoint[]>([]);
   const distanceRef = useRef(0);
 
+  const recordFix = useCallback((wp: Waypoint, coords: GeolocationCoordinates) => {
+    const prev = waypointsRef.current[waypointsRef.current.length - 1];
+    if (prev) {
+      distanceRef.current += haversineMeters(prev, wp);
+    }
+    waypointsRef.current = [...waypointsRef.current, wp];
+
+    setState(s => ({
+      ...s,
+      waypoints: waypointsRef.current,
+      distanceMeters: distanceRef.current,
+      currentCoords: coords,
+      acquiring: false,
+      error: null,
+    }));
+  }, []);
+
   const start = useCallback(() => {
     setState(s => ({ ...s, acquiring: true, error: null }));
+
+    if (Capacitor.isNativePlatform()) {
+      BackgroundGeolocation.addWatcher(
+        {
+          backgroundMessage: 'Tracking your run in the background.',
+          backgroundTitle: 'Running App',
+          requestPermissions: true,
+          distanceFilter: 0,
+        },
+        (location?: BGLocation, error?: Error) => {
+          if (error || !location) {
+            setState(s => ({ ...s, error: error?.message ?? 'Location error', acquiring: false }));
+            return;
+          }
+          if (location.accuracy > 30) return; // discard low-accuracy fixes
+
+          const wp: Waypoint = {
+            lat: location.latitude,
+            lng: location.longitude,
+            ts: location.time ?? Date.now(),
+            alt: location.altitude ?? undefined,
+          };
+          recordFix(wp, {
+            latitude: location.latitude,
+            longitude: location.longitude,
+            accuracy: location.accuracy,
+            altitude: location.altitude,
+            altitudeAccuracy: location.altitudeAccuracy,
+            heading: location.bearing,
+            speed: location.speed,
+          } as GeolocationCoordinates);
+        }
+      ).then(id => { nativeWatcherIdRef.current = id; });
+      return;
+    }
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
@@ -54,30 +113,20 @@ export function useGPS() {
           ts: pos.timestamp,
           alt: pos.coords.altitude ?? undefined,
         };
-
-        const prev = waypointsRef.current[waypointsRef.current.length - 1];
-        if (prev) {
-          distanceRef.current += haversineMeters(prev, wp);
-        }
-        waypointsRef.current = [...waypointsRef.current, wp];
-
-        setState(s => ({
-          ...s,
-          waypoints: waypointsRef.current,
-          distanceMeters: distanceRef.current,
-          currentCoords: pos.coords,
-          acquiring: false,
-          error: null,
-        }));
+        recordFix(wp, pos.coords);
       },
       (err) => {
         setState(s => ({ ...s, error: err.message, acquiring: false }));
       },
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
     );
-  }, []);
+  }, [recordFix]);
 
   const stop = useCallback(() => {
+    if (nativeWatcherIdRef.current !== null) {
+      BackgroundGeolocation.removeWatcher({ id: nativeWatcherIdRef.current });
+      nativeWatcherIdRef.current = null;
+    }
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
