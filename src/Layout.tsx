@@ -1,5 +1,6 @@
 import React from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
+import { Capacitor } from '@capacitor/core';
 import { useAuth } from './AuthContext';
 import './layout.css';
 
@@ -24,7 +25,8 @@ const ProfileIcon = () => (
 );
 
 export default function Layout() {
-  const { user, loading, googleBtnRef } = useAuth();
+  const { user, loading, googleBtnRef, signInNative } = useAuth();
+  const isNative = Capacitor.isNativePlatform();
 
   if (loading) {
     return <div className="login-screen"><span className="login-loading">Loading…</span></div>;
@@ -35,7 +37,13 @@ export default function Layout() {
       <div className="login-screen">
         <h1 className="login-title">Run</h1>
         <p className="login-subtitle">Track your runs, see your progress.</p>
-        <div ref={googleBtnRef} className="google-btn-container" />
+        {isNative ? (
+          <button className="google-btn-native" onClick={signInNative}>
+            Sign in with Google
+          </button>
+        ) : (
+          <div ref={googleBtnRef} className="google-btn-container" />
+        )}
       </div>
     );
   }
