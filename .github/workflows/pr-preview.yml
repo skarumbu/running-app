@@ -9,6 +9,8 @@ jobs:
   deploy_preview:
     if: github.event.action != 'closed'
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     outputs:
       preview_url: ${{ steps.deploy.outputs.static_web_app_url }}
     steps:
