@@ -35,7 +35,7 @@ jobs:
       - name: Build unsigned .app
         working-directory: ios/App
         run: |
-          xcodebuild -project App.xcodeproj \
+          xcodebuild -workspace App.xcworkspace \
             -scheme App \
             -configuration Release \
             -sdk iphoneos \
