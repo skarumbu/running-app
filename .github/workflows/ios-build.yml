@@ -51,13 +51,15 @@ jobs:
       - name: Package as .ipa
         working-directory: ios/App
         run: |
+          name="RunningApp-$(date +%Y%m%d)-${GITHUB_SHA::7}"
+          echo "IPA_NAME=$name" >> "$GITHUB_ENV"
           mkdir -p Payload
           cp -r build/Build/Products/Release-iphoneos/App.app Payload/
-          zip -r RunningApp.ipa Payload
+          zip -ry "$name.ipa" Payload
 
       - name: Upload .ipa artifact
         uses: actions/upload-artifact@v4
         with:
-          name: RunningApp-ipa
-          path: ios/App/RunningApp.ipa
+          name: ${{ env.IPA_NAME }}
+          path: ios/App/${{ env.IPA_NAME }}.ipa
           retention-days: 14
