@@ -55,7 +55,7 @@ jobs:
           echo "IPA_NAME=$name" >> "$GITHUB_ENV"
           mkdir -p Payload
           cp -r build/Build/Products/Release-iphoneos/App.app Payload/
-          zip -r "$name.ipa" Payload
+          zip -ry "$name.ipa" Payload
 
       - name: Upload .ipa artifact
         uses: actions/upload-artifact@v4
