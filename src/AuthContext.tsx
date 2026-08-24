@@ -15,6 +15,7 @@ interface AuthContextValue {
   signOut: () => void;
   googleBtnRef: React.RefObject<HTMLDivElement | null>;
   signInNative: () => void;
+  nativeSignInError: string | null;
   apiFetch: (url: string, options?: RequestInit) => Promise<Response>;
 }
 
@@ -34,12 +35,14 @@ const AuthContext = createContext<AuthContextValue>({
   signOut: () => {},
   googleBtnRef: { current: null } as React.RefObject<HTMLDivElement | null>,
   signInNative: () => {},
+  nativeSignInError: null,
   apiFetch: (url, options) => fetch(url, options),
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [nativeSignInError, setNativeSignInError] = useState<string | null>(null);
   const googleBtnRef = useRef<HTMLDivElement | null>(null);
 
   const handleCredentialResponse = useCallback(async (response: { credential: string }) => {
@@ -120,13 +123,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!isNative) return;
-    GoogleAuth.initialize();
+    GoogleAuth.initialize().catch((e: any) => {
+      setNativeSignInError(`Google Sign-In failed to initialize: ${e?.message ?? e}`);
+    });
   }, [isNative]);
 
   const signInNative = useCallback(() => {
-    GoogleAuth.signIn({ scopes: ['profile', 'email'] }).then((result) => {
-      handleCredentialResponse({ credential: result.authentication.idToken });
-    });
+    setNativeSignInError(null);
+    GoogleAuth.signIn({
+      scopes: ['profile', 'email'],
+      // The plugin's native iOS code (Plugin.swift) requires serverClientId
+      // to be present — if it's missing, it silently `return`s without ever
+      // resolving or rejecting the call, hanging the JS promise forever with
+      // no error at all. Reusing the web OAuth client ID here satisfies that
+      // guard; the backend doesn't restrict by audience, so any valid client
+      // ID works.
+      serverClientId: process.env.REACT_APP_GOOGLE_CLIENT_ID,
+    })
+      .then((result) => {
+        handleCredentialResponse({ credential: result.authentication.idToken });
+      })
+      .catch((e: any) => {
+        setNativeSignInError(`Sign-in failed: ${e?.message ?? e}`);
+      });
   }, [handleCredentialResponse]);
 
   const apiFetch = useCallback((url: string, options: RequestInit = {}) => {
@@ -147,7 +166,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, signOut, googleBtnRef, signInNative, apiFetch }}>
+    <AuthContext.Provider value={{ user, loading, signOut, googleBtnRef, signInNative, nativeSignInError, apiFetch }}>
       {children}
     </AuthContext.Provider>
   );
