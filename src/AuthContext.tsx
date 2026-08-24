@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { GoogleAuth } from '@southdevs/capacitor-google-auth';
+import { withTimeout } from './lib/withTimeout';
+import { trackException, trackEvent } from './lib/telemetry';
 
 export interface User {
   id: string;
@@ -41,6 +43,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const googleBtnRef = useRef<HTMLDivElement | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- read by future UI wiring; only the setter is used here
+  const [nativeSignInError, setNativeSignInError] = useState<string | null>(null);
 
   const handleCredentialResponse = useCallback(async (response: { credential: string }) => {
     const token = response.credential;
@@ -120,13 +124,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!isNative) return;
-    GoogleAuth.initialize();
+    GoogleAuth.initialize().catch((e: any) => {
+      const message = `Google Sign-In failed to initialize: ${e?.message ?? e}`;
+      setNativeSignInError(message);
+      trackException(e instanceof Error ? e : new Error(message), { stage: 'initialize' });
+    });
   }, [isNative]);
 
   const signInNative = useCallback(() => {
-    GoogleAuth.signIn({ scopes: ['profile', 'email'] }).then((result) => {
-      handleCredentialResponse({ credential: result.authentication.idToken });
-    });
+    setNativeSignInError(null);
+    withTimeout(
+      GoogleAuth.signIn({
+        scopes: ['profile', 'email'],
+        // The plugin's native iOS code (Plugin.swift) requires serverClientId
+        // to be present — if it's missing, it silently `return`s without ever
+        // resolving or rejecting the call, hanging the JS promise forever with
+        // no error at all. Reusing the web OAuth client ID here satisfies that
+        // guard; the backend doesn't restrict by audience, so any valid client
+        // ID works.
+        serverClientId: process.env.REACT_APP_GOOGLE_CLIENT_ID,
+      }),
+      15000,
+      'Native sign-in timed out after 15s — the native call never responded'
+    )
+      .then((result) => {
+        trackEvent('native_sign_in_success');
+        handleCredentialResponse({ credential: result.authentication.idToken });
+      })
+      .catch((e: any) => {
+        const message = `Sign-in failed: ${e?.message ?? e}`;
+        setNativeSignInError(message);
+        trackException(e instanceof Error ? e : new Error(message), { stage: 'signIn' });
+      });
   }, [handleCredentialResponse]);
 
   const apiFetch = useCallback((url: string, options: RequestInit = {}) => {
