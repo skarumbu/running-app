@@ -4,6 +4,7 @@ import { useAuth } from '../../AuthContext';
 import { useGPS } from '../../hooks/useGPS';
 import { useRunTimer } from '../../hooks/useRunTimer';
 import { useWakeLock } from '../../hooks/useWakeLock';
+import { showRunTrackingNotification, clearRunTrackingNotification } from '../../lib/runNotification';
 import TrackMap from './TrackMap';
 import './track.css';
 
@@ -79,6 +80,7 @@ export default function TrackTab() {
     gps.start();
     timer.start();
     await wakeLock.acquire();
+    showRunTrackingNotification();
   };
 
   const handlePause = () => {
@@ -98,6 +100,7 @@ export default function TrackTab() {
     timer.pause();
     gps.stop();
     wakeLock.release();
+    clearRunTrackingNotification();
     setPhase('saving');
   };
 
