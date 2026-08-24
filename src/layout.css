@@ -51,6 +51,15 @@
   color: var(--text-muted);
 }
 
+.login-error {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: #E84545;
+  margin-top: 8px;
+  max-width: 280px;
+  text-align: center;
+}
+
 /* ── App shell ── */
 .app-shell {
   display: flex;

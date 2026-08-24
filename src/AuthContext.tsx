@@ -17,6 +17,7 @@ interface AuthContextValue {
   signOut: () => void;
   googleBtnRef: React.RefObject<HTMLDivElement | null>;
   signInNative: () => void;
+  nativeSignInError: string | null;
   apiFetch: (url: string, options?: RequestInit) => Promise<Response>;
 }
 
@@ -36,15 +37,15 @@ const AuthContext = createContext<AuthContextValue>({
   signOut: () => {},
   googleBtnRef: { current: null } as React.RefObject<HTMLDivElement | null>,
   signInNative: () => {},
+  nativeSignInError: null,
   apiFetch: (url, options) => fetch(url, options),
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const googleBtnRef = useRef<HTMLDivElement | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- read by future UI wiring; only the setter is used here
   const [nativeSignInError, setNativeSignInError] = useState<string | null>(null);
+  const googleBtnRef = useRef<HTMLDivElement | null>(null);
 
   const handleCredentialResponse = useCallback(async (response: { credential: string }) => {
     const token = response.credential;
@@ -176,7 +177,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, signOut, googleBtnRef, signInNative, apiFetch }}>
+    <AuthContext.Provider value={{ user, loading, signOut, googleBtnRef, signInNative, nativeSignInError, apiFetch }}>
       {children}
     </AuthContext.Provider>
   );
