@@ -1,4 +1,5 @@
 // src/lib/telemetry.test.ts
+export {};
 
 const mockTrackException = jest.fn();
 const mockTrackEvent = jest.fn();
