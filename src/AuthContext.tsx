@@ -130,7 +130,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInNative = useCallback(() => {
     setNativeSignInError(null);
-    GoogleAuth.signIn({ scopes: ['profile', 'email'] })
+    GoogleAuth.signIn({
+      scopes: ['profile', 'email'],
+      // The plugin's native iOS code (Plugin.swift) requires serverClientId
+      // to be present — if it's missing, it silently `return`s without ever
+      // resolving or rejecting the call, hanging the JS promise forever with
+      // no error at all. Reusing the web OAuth client ID here satisfies that
+      // guard; the backend doesn't restrict by audience, so any valid client
+      // ID works.
+      serverClientId: process.env.REACT_APP_GOOGLE_CLIENT_ID,
+    })
       .then((result) => {
         handleCredentialResponse({ credential: result.authentication.idToken });
       })
