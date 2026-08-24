@@ -25,7 +25,7 @@ const ProfileIcon = () => (
 );
 
 export default function Layout() {
-  const { user, loading, googleBtnRef, signInNative } = useAuth();
+  const { user, loading, googleBtnRef, signInNative, nativeSignInError } = useAuth();
   const isNative = Capacitor.isNativePlatform();
 
   if (loading) {
@@ -38,9 +38,12 @@ export default function Layout() {
         <h1 className="login-title">Run</h1>
         <p className="login-subtitle">Track your runs, see your progress.</p>
         {isNative ? (
-          <button className="google-btn-native" onClick={signInNative}>
-            Sign in with Google
-          </button>
+          <>
+            <button className="google-btn-native" onClick={signInNative}>
+              Sign in with Google
+            </button>
+            {nativeSignInError && <p className="login-error">{nativeSignInError}</p>}
+          </>
         ) : (
           <div ref={googleBtnRef} className="google-btn-container" />
         )}
