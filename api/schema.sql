@@ -1,6 +1,16 @@
 -- Running App schema
 -- Run against the Azure PostgreSQL instance declared in azure-infrastructure/modules/runningapp.bicep
 
+-- Migration note (2026-08-25): the columns below were added after initial
+-- deployment. Existing databases need this run manually before the new
+-- API code is deployed:
+--
+--   ALTER TABLE runs
+--     ADD COLUMN weather_json JSONB,
+--     ADD COLUMN route_summary TEXT,
+--     ADD COLUMN route_thumbnail JSONB,
+--     ADD COLUMN note TEXT;
+
 CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   google_id TEXT UNIQUE NOT NULL,
@@ -18,7 +28,11 @@ CREATE TABLE runs (
   duration_seconds INTEGER NOT NULL,
   avg_pace_seconds_per_km FLOAT,
   name TEXT,
-  waypoints JSONB NOT NULL DEFAULT '[]'
+  waypoints JSONB NOT NULL DEFAULT '[]',
+  weather_json JSONB,
+  route_summary TEXT,
+  route_thumbnail JSONB,
+  note TEXT
 );
 
 CREATE INDEX idx_runs_user_id ON runs(user_id);
