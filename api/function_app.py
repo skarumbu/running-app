@@ -63,7 +63,10 @@ def require_auth(req: func.HttpRequest):
     try:
         with urllib.request.urlopen(f"https://oauth2.googleapis.com/tokeninfo?id_token={token}", timeout=5) as resp:
             claims = json.loads(resp.read().decode())
-        if claims.get("aud") != os.environ.get("GOOGLE_CLIENT_ID"):
+        allowed_client_ids = {
+            c.strip() for c in os.environ.get("GOOGLE_CLIENT_ID", "").split(",") if c.strip()
+        }
+        if claims.get("aud") not in allowed_client_ids:
             return None
         google_id, email = claims.get("sub"), claims.get("email")
         display_name = claims.get("name") or email
