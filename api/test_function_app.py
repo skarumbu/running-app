@@ -415,5 +415,87 @@ class TestGetRunEnrichmentFields(unittest.TestCase):
         self.assertEqual(body["badges_earned"], [])
 
 
+class FakeUpdateCursor:
+    def __init__(self, found):
+        self.found = found
+        self._last = None
+
+    def execute(self, query, params=None):
+        if query.startswith("UPDATE runs"):
+            self._last = ("run-1", "user-1", "note text", None, None) if self.found else None
+        else:
+            self._last = None
+
+    def fetchone(self):
+        return self._last
+
+    def fetchall(self):
+        return []
+
+    @property
+    def description(self):
+        # RETURNING * returns every column; only the ones update_run reads
+        # (id, user_id, note, weather_json, route_thumbnail) matter here.
+        return [("id",), ("user_id",), ("note",), ("weather_json",), ("route_thumbnail",)]
+
+    def close(self):
+        pass
+
+
+class FakeUpdateConn:
+    def __init__(self, found):
+        self.found = found
+
+    def cursor(self):
+        return FakeUpdateCursor(self.found)
+
+    def commit(self):
+        pass
+
+    def close(self):
+        pass
+
+
+class TestUpdateRun(unittest.TestCase):
+    def _make_request(self, body):
+        req = MagicMock()
+        req.headers = {"Authorization": "Bearer faketoken"}
+        req.route_params = {"run_id": "run-1"}
+        req.get_json.return_value = body
+        return req
+
+    @patch("function_app.require_auth", return_value=("gid", "e@x.com", "Name"))
+    @patch("function_app.get_or_create_user", return_value={"id": "user-1"})
+    @patch("function_app.get_conn")
+    def test_updates_note(self, mock_get_conn, mock_get_user, mock_auth):
+        mock_get_conn.return_value = FakeUpdateConn(found=True)
+        req = self._make_request({"note": "note text"})
+        resp = function_app.update_run(req)
+        self.assertEqual(resp.status_code, 200)
+        body = json.loads(resp.get_body())
+        self.assertEqual(body["note"], "note text")
+
+    @patch("function_app.require_auth", return_value=("gid", "e@x.com", "Name"))
+    @patch("function_app.get_or_create_user", return_value={"id": "user-1"})
+    @patch("function_app.get_conn")
+    def test_not_found_returns_404(self, mock_get_conn, mock_get_user, mock_auth):
+        mock_get_conn.return_value = FakeUpdateConn(found=False)
+        req = self._make_request({"note": "note text"})
+        resp = function_app.update_run(req)
+        self.assertEqual(resp.status_code, 404)
+
+    @patch("function_app.require_auth", return_value=None)
+    def test_unauthenticated_returns_401(self, mock_auth):
+        req = self._make_request({"note": "x"})
+        resp = function_app.update_run(req)
+        self.assertEqual(resp.status_code, 401)
+
+    @patch("function_app.require_auth", return_value=("gid", "e@x.com", "Name"))
+    def test_missing_note_key_returns_400(self, mock_auth):
+        req = self._make_request({})
+        resp = function_app.update_run(req)
+        self.assertEqual(resp.status_code, 400)
+
+
 if __name__ == "__main__":
     unittest.main()

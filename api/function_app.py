@@ -433,6 +433,46 @@ def get_run(req: func.HttpRequest) -> func.HttpResponse:
         return err(str(e), 500)
 
 
+@app.route(route="runs/{run_id}", methods=["PATCH"])
+def update_run(req: func.HttpRequest) -> func.HttpResponse:
+    run_id = req.route_params.get("run_id")
+    identity = require_auth(req)
+    if not identity:
+        return err("Unauthorized", 401)
+    google_id, email, display_name = identity
+    try:
+        body = req.get_json()
+    except Exception:
+        return err("Invalid JSON")
+    if "note" not in body:
+        return err("note field required")
+    note = body["note"]
+    try:
+        conn = get_conn()
+        user = get_or_create_user(conn, google_id, email, display_name)
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE runs SET note = %s WHERE id = %s AND user_id = %s RETURNING *",
+            (note, run_id, user["id"]),
+        )
+        run = _row(cur, cur.fetchone())
+        if not run:
+            cur.close()
+            conn.close()
+            return err("Not found", 404)
+        conn.commit()
+        run["weather_json"] = _maybe_json(run["weather_json"])
+        run["route_thumbnail"] = _maybe_json(run["route_thumbnail"])
+        cur.execute("SELECT badge_type FROM badges WHERE run_id = %s", (run_id,))
+        run["badges_earned"] = [r[0] for r in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return json_response(run)
+    except Exception as e:
+        logging.exception("update_run error")
+        return err(str(e), 500)
+
+
 @app.route(route="runs/{run_id}", methods=["DELETE"])
 def delete_run(req: func.HttpRequest) -> func.HttpResponse:
     run_id = req.route_params.get("run_id")
