@@ -2,11 +2,12 @@ import json
 import os
 import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(__file__))
 
+import function_app
 from function_app import (
     weather_code_to_condition,
     downsample_waypoints,
@@ -181,6 +182,119 @@ class TestBuildRouteSummary(unittest.TestCase):
     def test_falls_back_to_run_for_too_few_waypoints(self):
         result = build_route_summary([wp(0, 0)])
         self.assertEqual(result, "Run")
+
+
+class FakeCursor:
+    def __init__(self, conn):
+        self.conn = conn
+        self._last_row = None
+
+    def execute(self, query, params=None):
+        if query.startswith("INSERT INTO runs"):
+            self._last_row = self.conn.inserted_row
+        elif query.startswith("SELECT COUNT(*) FROM runs"):
+            self._last_row = (1,)
+        elif query.startswith("SELECT DISTINCT DATE"):
+            self._last_row = None
+        else:
+            self._last_row = None
+
+    def fetchone(self):
+        return self._last_row
+
+    def fetchall(self):
+        return []
+
+    @property
+    def description(self):
+        return [(k,) for k in self.conn.inserted_row_keys]
+
+    def close(self):
+        pass
+
+
+class FakeConn:
+    def __init__(self, inserted_row_keys, inserted_row):
+        self.inserted_row_keys = inserted_row_keys
+        self.inserted_row = inserted_row
+
+    def cursor(self):
+        return FakeCursor(self)
+
+    def commit(self):
+        pass
+
+    def close(self):
+        pass
+
+
+class TestCreateRunEnrichment(unittest.TestCase):
+    def _make_request(self, body):
+        req = MagicMock()
+        req.headers = {"Authorization": "Bearer faketoken"}
+        req.get_json.return_value = body
+        return req
+
+    def _run_columns(self):
+        return [
+            "id", "user_id", "started_at", "ended_at", "distance_meters",
+            "duration_seconds", "avg_pace_seconds_per_km", "name", "waypoints",
+            "weather_json", "route_summary", "route_thumbnail", "note",
+        ]
+
+    @patch("function_app.require_auth", return_value=("gid", "e@x.com", "Name"))
+    @patch("function_app.get_or_create_user", return_value={"id": "user-1"})
+    @patch("function_app.compute_and_upsert_badges", return_value=[])
+    @patch("function_app.build_route_summary", return_value="Up and back through Eastlake")
+    @patch("function_app.fetch_weather", return_value={"temp_f": 68, "condition": "Clear", "icon": "clear"})
+    @patch("function_app.get_conn")
+    def test_success_stores_enrichment_fields(
+        self, mock_get_conn, mock_fetch_weather, mock_build_summary,
+        mock_badges, mock_get_user, mock_auth,
+    ):
+        waypoints = [{"lat": 47.65 + i * 0.0001, "lng": -122.32, "ts": i} for i in range(5)]
+        columns = self._run_columns()
+        row_values = ["run-1", "user-1", None, None, 1000, 300, 300.0, None, waypoints,
+                      None, None, None, None]
+        mock_get_conn.return_value = FakeConn(columns, tuple(row_values))
+
+        req = self._make_request({
+            "distance_meters": 1000, "duration_seconds": 300, "waypoints": waypoints,
+        })
+        resp = function_app.create_run(req)
+
+        self.assertEqual(resp.status_code, 201)
+        body = json.loads(resp.get_body())
+        self.assertEqual(body["route_summary"], "Up and back through Eastlake")
+        self.assertEqual(body["weather_json"], {"temp_f": 68, "condition": "Clear", "icon": "clear"})
+        self.assertEqual(body["route_thumbnail"], downsample_waypoints(waypoints))
+        self.assertIsNone(body["note"])
+
+    @patch("function_app.require_auth", return_value=("gid", "e@x.com", "Name"))
+    @patch("function_app.get_or_create_user", return_value={"id": "user-1"})
+    @patch("function_app.compute_and_upsert_badges", return_value=[])
+    @patch("function_app.build_route_summary", side_effect=Exception("geocoding down"))
+    @patch("function_app.fetch_weather", side_effect=Exception("weather api down"))
+    @patch("function_app.get_conn")
+    def test_enrichment_failure_still_saves_run(
+        self, mock_get_conn, mock_fetch_weather, mock_build_summary,
+        mock_badges, mock_get_user, mock_auth,
+    ):
+        waypoints = [{"lat": 47.65, "lng": -122.32, "ts": 0}]
+        columns = self._run_columns()
+        row_values = ["run-1", "user-1", None, None, 1000, 300, 300.0, None, waypoints,
+                      None, None, None, None]
+        mock_get_conn.return_value = FakeConn(columns, tuple(row_values))
+
+        req = self._make_request({
+            "distance_meters": 1000, "duration_seconds": 300, "waypoints": waypoints,
+        })
+        resp = function_app.create_run(req)
+
+        self.assertEqual(resp.status_code, 201)
+        body = json.loads(resp.get_body())
+        self.assertIsNone(body["weather_json"])
+        self.assertEqual(body["route_summary"], "Run")
 
 
 if __name__ == "__main__":

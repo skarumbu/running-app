@@ -352,18 +352,44 @@ def create_run(req: func.HttpRequest) -> func.HttpResponse:
     avg_pace = duration / (distance / 1000) if distance > 0 else None
     now = datetime.now(timezone.utc)
     started_at = now - timedelta(seconds=duration)
+
+    weather_data = None
+    route_summary = "Run"
+    route_thumbnail = []
+    if len(waypoints) >= 1:
+        route_thumbnail = downsample_waypoints(waypoints)
+        try:
+            weather_data = fetch_weather(waypoints[0]["lat"], waypoints[0]["lng"], started_at)
+        except Exception:
+            logging.exception("weather enrichment failed")
+            weather_data = None
+        try:
+            route_summary = build_route_summary(waypoints)
+        except Exception:
+            logging.exception("route summary enrichment failed")
+            route_summary = "Run"
+
     try:
         conn = get_conn()
         user = get_or_create_user(conn, google_id, email, display_name)
         cur = conn.cursor()
-        cur.execute("INSERT INTO runs (user_id, started_at, ended_at, distance_meters, duration_seconds, avg_pace_seconds_per_km, name, waypoints) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING *",
-                    (user["id"], started_at, now, distance, duration, avg_pace, name, json.dumps(waypoints)))
+        cur.execute(
+            "INSERT INTO runs (user_id, started_at, ended_at, distance_meters, duration_seconds, "
+            "avg_pace_seconds_per_km, name, waypoints, weather_json, route_summary, route_thumbnail) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *",
+            (user["id"], started_at, now, distance, duration, avg_pace, name, json.dumps(waypoints),
+             json.dumps(weather_data) if weather_data else None, route_summary, json.dumps(route_thumbnail)),
+        )
         run = _row(cur, cur.fetchone())
         conn.commit()
         cur.close()
         badges_earned = compute_and_upsert_badges(conn, user["id"], run["id"], distance)
         run["badges_earned"] = badges_earned
         run["waypoints"] = waypoints
+        run["weather_json"] = weather_data
+        run["route_summary"] = route_summary
+        run["route_thumbnail"] = route_thumbnail
+        run["note"] = None
         conn.close()
         return json_response(run, 201)
     except Exception as e:
