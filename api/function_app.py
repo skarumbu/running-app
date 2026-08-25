@@ -1,6 +1,8 @@
 import json
+import math
 import os
 import ssl
+import time
 import logging
 import urllib.request
 from urllib.parse import urlparse
@@ -53,6 +55,160 @@ def json_response(data, status=200):
 
 def err(msg, status=400):
     return func.HttpResponse(json.dumps({"error": msg}), status_code=status, mimetype="application/json")
+
+
+def _maybe_json(value):
+    if isinstance(value, (dict, list)) or value is None:
+        return value
+    try:
+        return json.loads(value)
+    except (TypeError, ValueError):
+        return value
+
+
+def _haversine_m(a, b):
+    R = 6371000
+    lat1, lon1 = math.radians(a["lat"]), math.radians(a["lng"])
+    lat2, lon2 = math.radians(b["lat"]), math.radians(b["lng"])
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    h = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+    return 2 * R * math.asin(math.sqrt(h))
+
+
+WEATHER_CODE_MAP = {
+    0: ("Clear", "clear"),
+    1: ("Mainly clear", "clear"),
+    2: ("Partly cloudy", "cloudy"),
+    3: ("Overcast", "cloudy"),
+    45: ("Fog", "cloudy"),
+    48: ("Fog", "cloudy"),
+    51: ("Light drizzle", "rain"),
+    53: ("Drizzle", "rain"),
+    55: ("Heavy drizzle", "rain"),
+    61: ("Light rain", "rain"),
+    63: ("Rain", "rain"),
+    65: ("Heavy rain", "rain"),
+    66: ("Freezing rain", "rain"),
+    67: ("Freezing rain", "rain"),
+    71: ("Light snow", "snow"),
+    73: ("Snow", "snow"),
+    75: ("Heavy snow", "snow"),
+    77: ("Snow grains", "snow"),
+    80: ("Rain showers", "rain"),
+    81: ("Rain showers", "rain"),
+    82: ("Violent rain showers", "rain"),
+    85: ("Snow showers", "snow"),
+    86: ("Snow showers", "snow"),
+    95: ("Thunderstorm", "storm"),
+    96: ("Thunderstorm with hail", "storm"),
+    99: ("Thunderstorm with hail", "storm"),
+}
+
+
+def weather_code_to_condition(code):
+    return WEATHER_CODE_MAP.get(code, ("Unknown", "cloudy"))
+
+
+def downsample_waypoints(waypoints, max_points=16):
+    if len(waypoints) <= max_points:
+        return [{"lat": w["lat"], "lng": w["lng"]} for w in waypoints]
+    step = (len(waypoints) - 1) / (max_points - 1)
+    indices = sorted(set(round(i * step) for i in range(max_points)))
+    if indices[-1] != len(waypoints) - 1:
+        indices[-1] = len(waypoints) - 1
+    return [{"lat": waypoints[i]["lat"], "lng": waypoints[i]["lng"]} for i in indices]
+
+
+ROUTE_ENDPOINT_THRESHOLD_M = 150
+ROUTE_RETRACE_THRESHOLD_M = 40
+
+
+def classify_route_shape(waypoints):
+    if len(waypoints) < 4:
+        return "point_to_point"
+    start, end = waypoints[0], waypoints[-1]
+    if _haversine_m(start, end) > ROUTE_ENDPOINT_THRESHOLD_M:
+        return "point_to_point"
+    mid = len(waypoints) // 2
+    first_half = waypoints[:mid]
+    second_half = list(reversed(waypoints[mid:]))
+    n = min(len(first_half), len(second_half))
+    if n == 0:
+        return "loop"
+    avg_gap = sum(_haversine_m(first_half[i], second_half[i]) for i in range(n)) / n
+    return "out_and_back" if avg_gap < ROUTE_RETRACE_THRESHOLD_M else "loop"
+
+
+def fetch_weather(lat, lng, started_at):
+    url = (
+        "https://api.open-meteo.com/v1/forecast"
+        f"?latitude={lat}&longitude={lng}"
+        "&hourly=temperature_2m,weathercode"
+        "&past_days=1&forecast_days=1&temperature_unit=fahrenheit&timezone=UTC"
+    )
+    try:
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            data = json.loads(resp.read().decode())
+        times = data["hourly"]["time"]
+        temps = data["hourly"]["temperature_2m"]
+        codes = data["hourly"]["weathercode"]
+        target_str = started_at.strftime("%Y-%m-%dT%H:00")
+        if target_str in times:
+            idx = times.index(target_str)
+        else:
+            target_naive = started_at.replace(tzinfo=None)
+            idx = min(
+                range(len(times)),
+                key=lambda i: abs(datetime.fromisoformat(times[i]) - target_naive),
+            )
+        condition, icon = weather_code_to_condition(codes[idx])
+        return {"temp_f": round(temps[idx]), "condition": condition, "icon": icon}
+    except Exception:
+        logging.exception("fetch_weather failed")
+        return None
+
+
+def reverse_geocode_place(lat, lng):
+    url = f"https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=14&lat={lat}&lon={lng}"
+    req = urllib.request.Request(url, headers={"User-Agent": "running-app/1.0 (personal project)"})
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode())
+    except Exception:
+        logging.exception("reverse_geocode_place failed")
+        return None
+    addr = data.get("address", {})
+    return addr.get("suburb") or addr.get("neighbourhood") or addr.get("residential") or addr.get("road")
+
+
+def build_route_summary(waypoints):
+    if len(waypoints) < 2:
+        return "Run"
+    try:
+        shape = classify_route_shape(waypoints)
+        n = len(waypoints)
+        sample_indices = [0, n // 2, n - 1]
+        places = []
+        for i, idx in enumerate(sample_indices):
+            if i > 0:
+                time.sleep(1)  # Nominatim usage policy: max 1 request/second
+            place = reverse_geocode_place(waypoints[idx]["lat"], waypoints[idx]["lng"])
+            if place and (not places or places[-1] != place):
+                places.append(place)
+        if shape == "point_to_point":
+            if len(places) >= 2:
+                return f"From {places[0]} to {places[-1]}"
+            return "Run"
+        if not places:
+            return "Run"
+        verb = "Up and back" if shape == "out_and_back" else "Loop"
+        if len(places) == 1:
+            return f"{verb} through {places[0]}"
+        return f"{verb} through {places[0]} and {places[-1]}"
+    except Exception:
+        logging.exception("build_route_summary failed")
+        return "Run"
 
 
 def require_auth(req: func.HttpRequest):
