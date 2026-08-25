@@ -1,0 +1,110 @@
+name: iOS Simulator Smoke Test
+
+# Runs automatically so pure logic bugs are caught without a physical
+# iPhone or AltStore sideloading. Builds for the Simulator (no code
+# signing needed at all) and does a basic boot/install/launch check —
+# not a substitute for the signed device build in ios-build.yml, and no
+# UI automation (that would need a UI test target added to
+# project.pbxproj by hand, which is out of scope here).
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  simulator_smoke_test:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web app
+        run: npm run build
+        env:
+          CI: false
+          REACT_APP_GOOGLE_CLIENT_ID: ${{ secrets.REACT_APP_GOOGLE_CLIENT_ID }}
+          REACT_APP_API_URL: https://running-app-prod-api.azurewebsites.net
+
+      - name: Sync Capacitor iOS project
+        run: npx cap sync ios
+        env:
+          REACT_APP_GOOGLE_IOS_CLIENT_ID: ${{ secrets.REACT_APP_GOOGLE_IOS_CLIENT_ID }}
+
+      - name: Build for iOS Simulator
+        working-directory: ios/App
+        run: |
+          xcodebuild -workspace App.xcworkspace \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
+            GOOGLE_IOS_REVERSED_CLIENT_ID="${{ secrets.GOOGLE_IOS_REVERSED_CLIENT_ID }}" \
+            build
+
+      - name: Boot simulator, install, and launch app
+        working-directory: ios/App
+        run: |
+          set -euo pipefail
+
+          APP_PATH="$(find build/Build/Products -maxdepth 1 -name '*.app' -print -quit)"
+          if [ -z "$APP_PATH" ]; then
+            echo "No .app bundle found under build/Build/Products" >&2
+            exit 1
+          fi
+          echo "App bundle: $APP_PATH"
+
+          # Pick a device runtime that actually exists on this runner
+          # instead of hardcoding a name that might not.
+          DEVICE_UDID="$(xcrun simctl list devices available -j | jq -r '
+            .devices
+            | to_entries[]
+            | select(.key | contains("iOS"))
+            | .value[]
+            | select(.isAvailable)
+            | .udid' | head -n 1)"
+
+          if [ -z "$DEVICE_UDID" ]; then
+            echo "No available iOS simulator device found" >&2
+            xcrun simctl list devices available
+            exit 1
+          fi
+          echo "Using simulator: $DEVICE_UDID"
+          xcrun simctl list devices available
+
+          xcrun simctl boot "$DEVICE_UDID"
+          xcrun simctl bootstatus "$DEVICE_UDID" -b
+
+          xcrun simctl install "$DEVICE_UDID" "$APP_PATH"
+          xcrun simctl launch "$DEVICE_UDID" com.skarumbu.runningapp
+
+          # Give the app a moment to render before capturing state.
+          sleep 5
+
+          mkdir -p smoke-test-output
+          xcrun simctl io "$DEVICE_UDID" screenshot smoke-test-output/launch.png
+
+          # A boot/install/launch smoke test only: fail if the app is no
+          # longer running (crash-on-launch), otherwise consider it a pass.
+          if ! xcrun simctl spawn "$DEVICE_UDID" launchctl list | grep -q com.skarumbu.runningapp; then
+            echo "App does not appear to be running after launch — possible crash" >&2
+            exit 1
+          fi
+
+          echo "$DEVICE_UDID" > smoke-test-output/device-udid.txt
+
+      - name: Upload smoke test screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulator-smoke-test-screenshot
+          path: ios/App/smoke-test-output/
+          retention-days: 14
+          if-no-files-found: warn
