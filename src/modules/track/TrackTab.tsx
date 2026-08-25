@@ -117,14 +117,32 @@ export default function TrackTab() {
           waypoints: gps.waypoints,
         }),
       });
-      if (!res.ok) throw new Error(`${res.status}`);
+      if (!res.ok) {
+        if (res.status === 401) {
+          throw new Error('Your session expired — sign out and sign in again, then try saving.');
+        }
+        let message = `Unexpected error (${res.status})`;
+        try {
+          const body = await res.json();
+          if (body?.error) message = body.error;
+        } catch {
+          // response wasn't JSON; keep the generic message above
+        }
+        throw new Error(message);
+      }
       const run = await res.json();
       timer.reset();
       gps.reset();
       setPhase('idle');
       navigate(`/history/${run.id}`);
     } catch (e: any) {
-      setSaveError(`Save failed: ${e.message}`);
+      // fetch() itself rejects with a TypeError when the request never
+      // reaches the server (offline, CORS, DNS) — distinct from the Errors
+      // thrown above for a real (non-ok) server response.
+      const message = e instanceof TypeError
+        ? "Couldn't reach the server — check your connection and try again."
+        : e.message;
+      setSaveError(`Save failed: ${message}`);
     }
   };
 
