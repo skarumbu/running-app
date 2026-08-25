@@ -303,8 +303,15 @@ def list_runs(req: func.HttpRequest) -> func.HttpResponse:
         conn = get_conn()
         user = get_or_create_user(conn, google_id, email, display_name)
         cur = conn.cursor()
-        cur.execute("SELECT id, started_at, ended_at, distance_meters, duration_seconds, avg_pace_seconds_per_km, name FROM runs WHERE user_id = %s ORDER BY started_at DESC", (user["id"],))
+        cur.execute(
+            "SELECT id, started_at, ended_at, distance_meters, duration_seconds, avg_pace_seconds_per_km, "
+            "name, route_summary, weather_json, route_thumbnail FROM runs WHERE user_id = %s ORDER BY started_at DESC",
+            (user["id"],),
+        )
         rows = _rows(cur)
+        for row in rows:
+            row["weather_json"] = _maybe_json(row["weather_json"])
+            row["route_thumbnail"] = _maybe_json(row["route_thumbnail"])
         cur.close()
         conn.close()
         return json_response(rows)
@@ -414,6 +421,8 @@ def get_run(req: func.HttpRequest) -> func.HttpResponse:
             cur.close()
             conn.close()
             return err("Not found", 404)
+        run["weather_json"] = _maybe_json(run["weather_json"])
+        run["route_thumbnail"] = _maybe_json(run["route_thumbnail"])
         cur.execute("SELECT badge_type FROM badges WHERE run_id = %s", (run_id,))
         run["badges_earned"] = [r[0] for r in cur.fetchall()]
         cur.close()

@@ -16,6 +16,7 @@ from function_app import (
     fetch_weather,
     reverse_geocode_place,
     build_route_summary,
+    _maybe_json,
 )
 
 
@@ -295,6 +296,123 @@ class TestCreateRunEnrichment(unittest.TestCase):
         body = json.loads(resp.get_body())
         self.assertIsNone(body["weather_json"])
         self.assertEqual(body["route_summary"], "Run")
+
+
+class TestMaybeJson(unittest.TestCase):
+    def test_passes_through_dict(self):
+        self.assertEqual(_maybe_json({"a": 1}), {"a": 1})
+
+    def test_passes_through_list(self):
+        self.assertEqual(_maybe_json([1, 2]), [1, 2])
+
+    def test_passes_through_none(self):
+        self.assertIsNone(_maybe_json(None))
+
+    def test_decodes_json_string(self):
+        self.assertEqual(_maybe_json('{"a": 1}'), {"a": 1})
+
+    def test_leaves_non_json_string_alone(self):
+        self.assertEqual(_maybe_json("Run"), "Run")
+
+
+class FakeSelectCursor:
+    def __init__(self, rows, columns):
+        self.rows = rows
+        self.columns = columns
+
+    def execute(self, query, params=None):
+        pass
+
+    def fetchone(self):
+        return self.rows[0] if self.rows else None
+
+    def fetchall(self):
+        return self.rows
+
+    @property
+    def description(self):
+        return [(c,) for c in self.columns]
+
+    def close(self):
+        pass
+
+
+class FakeSelectConn:
+    def __init__(self, rows, columns):
+        self.rows = rows
+        self.columns = columns
+
+    def cursor(self):
+        return FakeSelectCursor(self.rows, self.columns)
+
+    def close(self):
+        pass
+
+
+class TestListRunsEnrichmentFields(unittest.TestCase):
+    @patch("function_app.require_auth", return_value=("gid", "e@x.com", "Name"))
+    @patch("function_app.get_or_create_user", return_value={"id": "user-1"})
+    @patch("function_app.get_conn")
+    def test_normalizes_json_string_columns(self, mock_get_conn, mock_get_user, mock_auth):
+        columns = ["id", "started_at", "ended_at", "distance_meters", "duration_seconds",
+                   "avg_pace_seconds_per_km", "name", "route_summary", "weather_json", "route_thumbnail"]
+        row = ("run-1", None, None, 1000, 300, 300.0, None, "Up and back through Eastlake",
+               '{"temp_f": 68, "condition": "Clear", "icon": "clear"}', '[{"lat": 1, "lng": 2}]')
+        mock_get_conn.return_value = FakeSelectConn([row], columns)
+
+        req = MagicMock()
+        req.headers = {"Authorization": "Bearer faketoken"}
+        resp = function_app.list_runs(req)
+
+        self.assertEqual(resp.status_code, 200)
+        body = json.loads(resp.get_body())
+        self.assertEqual(body[0]["weather_json"], {"temp_f": 68, "condition": "Clear", "icon": "clear"})
+        self.assertEqual(body[0]["route_thumbnail"], [{"lat": 1, "lng": 2}])
+        self.assertEqual(body[0]["route_summary"], "Up and back through Eastlake")
+
+
+class TestGetRunEnrichmentFields(unittest.TestCase):
+    @patch("function_app.require_auth", return_value=("gid", "e@x.com", "Name"))
+    @patch("function_app.get_or_create_user", return_value={"id": "user-1"})
+    @patch("function_app.get_conn")
+    def test_normalizes_json_string_columns(self, mock_get_conn, mock_get_user, mock_auth):
+        columns = ["id", "user_id", "started_at", "ended_at", "distance_meters", "duration_seconds",
+                   "avg_pace_seconds_per_km", "name", "waypoints", "weather_json", "route_summary",
+                   "route_thumbnail", "note"]
+        row = ("run-1", "user-1", None, None, 1000, 300, 300.0, None, "[]",
+               '{"temp_f": 68, "condition": "Clear", "icon": "clear"}', "Run",
+               '[{"lat": 1, "lng": 2}]', None)
+
+        class FakeGetCursor(FakeSelectCursor):
+            def __init__(self):
+                super().__init__([row], columns)
+                self._badges_queried = False
+
+            def execute(self, query, params=None):
+                self._badges_queried = query.startswith("SELECT badge_type")
+
+            def fetchall(self):
+                return [] if self._badges_queried else self.rows
+
+        class FakeGetConn:
+            def cursor(self):
+                return FakeGetCursor()
+
+            def close(self):
+                pass
+
+        mock_get_conn.return_value = FakeGetConn()
+
+        req = MagicMock()
+        req.headers = {"Authorization": "Bearer faketoken"}
+        req.route_params = {"run_id": "run-1"}
+        resp = function_app.get_run(req)
+
+        self.assertEqual(resp.status_code, 200)
+        body = json.loads(resp.get_body())
+        self.assertEqual(body["weather_json"], {"temp_f": 68, "condition": "Clear", "icon": "clear"})
+        self.assertEqual(body["route_thumbnail"], [{"lat": 1, "lng": 2}])
+        self.assertEqual(body["badges_earned"], [])
 
 
 if __name__ == "__main__":
