@@ -1,6 +1,9 @@
+import json
 import os
 import sys
 import unittest
+from unittest.mock import patch
+from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -9,6 +12,9 @@ from function_app import (
     downsample_waypoints,
     classify_route_shape,
     _haversine_m,
+    fetch_weather,
+    reverse_geocode_place,
+    build_route_summary,
 )
 
 
@@ -106,6 +112,75 @@ class TestClassifyRouteShape(unittest.TestCase):
 
     def test_too_short_is_point_to_point(self):
         self.assertEqual(classify_route_shape([wp(0, 0), wp(0.001, 0.001)]), "point_to_point")
+
+
+class TestFetchWeather(unittest.TestCase):
+    @patch("function_app.urllib.request.urlopen")
+    def test_picks_hour_closest_to_started_at(self, mock_urlopen):
+        payload = json.dumps({
+            "hourly": {
+                "time": ["2026-08-24T06:00", "2026-08-24T07:00", "2026-08-24T08:00"],
+                "temperature_2m": [60.0, 68.0, 74.0],
+                "weathercode": [1, 2, 3],
+            }
+        }).encode()
+        mock_urlopen.return_value.__enter__.return_value.read.return_value = payload
+        started_at = datetime(2026, 8, 24, 7, 12, tzinfo=timezone.utc)
+        result = fetch_weather(47.65, -122.32, started_at)
+        self.assertEqual(result, {"temp_f": 68, "condition": "Partly cloudy", "icon": "cloudy"})
+
+    @patch("function_app.urllib.request.urlopen", side_effect=Exception("timeout"))
+    def test_returns_none_on_failure(self, mock_urlopen):
+        result = fetch_weather(47.65, -122.32, datetime.now(timezone.utc))
+        self.assertIsNone(result)
+
+
+class TestReverseGeocodePlace(unittest.TestCase):
+    @patch("function_app.urllib.request.urlopen")
+    def test_prefers_suburb(self, mock_urlopen):
+        payload = json.dumps({"address": {"suburb": "Eastlake", "road": "Fairview Ave"}}).encode()
+        mock_urlopen.return_value.__enter__.return_value.read.return_value = payload
+        self.assertEqual(reverse_geocode_place(47.65, -122.32), "Eastlake")
+
+    @patch("function_app.urllib.request.urlopen")
+    def test_falls_back_to_road(self, mock_urlopen):
+        payload = json.dumps({"address": {"road": "Fairview Ave"}}).encode()
+        mock_urlopen.return_value.__enter__.return_value.read.return_value = payload
+        self.assertEqual(reverse_geocode_place(47.65, -122.32), "Fairview Ave")
+
+    @patch("function_app.urllib.request.urlopen", side_effect=Exception("timeout"))
+    def test_returns_none_on_failure(self, mock_urlopen):
+        self.assertIsNone(reverse_geocode_place(47.65, -122.32))
+
+
+class TestBuildRouteSummary(unittest.TestCase):
+    @patch("function_app.time.sleep")
+    @patch("function_app.reverse_geocode_place", return_value="Eastlake")
+    def test_out_and_back_single_place(self, mock_geocode, mock_sleep):
+        result = build_route_summary(out_and_back_path())
+        self.assertEqual(result, "Up and back through Eastlake")
+
+    @patch("function_app.time.sleep")
+    @patch("function_app.reverse_geocode_place", side_effect=["Fremont", "Fremont", "Wallingford"])
+    def test_loop_two_places(self, mock_geocode, mock_sleep):
+        result = build_route_summary(loop_path())
+        self.assertEqual(result, "Loop through Fremont and Wallingford")
+
+    @patch("function_app.time.sleep")
+    @patch("function_app.reverse_geocode_place", side_effect=["Ballard", "Fremont", "Wallingford"])
+    def test_point_to_point(self, mock_geocode, mock_sleep):
+        result = build_route_summary(point_to_point_path())
+        self.assertEqual(result, "From Ballard to Wallingford")
+
+    @patch("function_app.time.sleep")
+    @patch("function_app.reverse_geocode_place", return_value=None)
+    def test_falls_back_to_run_when_geocoding_fails(self, mock_geocode, mock_sleep):
+        result = build_route_summary(out_and_back_path())
+        self.assertEqual(result, "Run")
+
+    def test_falls_back_to_run_for_too_few_waypoints(self):
+        result = build_route_summary([wp(0, 0)])
+        self.assertEqual(result, "Run")
 
 
 if __name__ == "__main__":
