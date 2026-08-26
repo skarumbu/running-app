@@ -197,6 +197,7 @@ class FakeCursor:
     def execute(self, query, params=None):
         if query.startswith("INSERT INTO runs"):
             self._last_row = self.conn.inserted_row
+            self.conn.last_insert_params = params
         elif query.startswith("SELECT COUNT(*) FROM runs"):
             self._last_row = (1,)
         elif query.startswith("SELECT DISTINCT DATE"):
@@ -222,6 +223,7 @@ class FakeConn:
     def __init__(self, inserted_row_keys, inserted_row):
         self.inserted_row_keys = inserted_row_keys
         self.inserted_row = inserted_row
+        self.last_insert_params = None
 
     def cursor(self):
         return FakeCursor(self)
@@ -300,6 +302,37 @@ class TestCreateRunEnrichment(unittest.TestCase):
         body = json.loads(resp.get_body())
         self.assertIsNone(body["weather_json"])
         self.assertEqual(body["route_summary"], "Run")
+
+    @patch("function_app.require_auth", return_value=("gid", "e@x.com", "Name"))
+    @patch("function_app.get_or_create_user", return_value={"id": "user-1"})
+    @patch("function_app.compute_and_upsert_badges", return_value=[])
+    @patch("function_app.build_route_summary", return_value="Up and back through Eastlake")
+    @patch("function_app.fetch_weather", return_value=None)
+    @patch("function_app.get_conn")
+    def test_name_is_derived_from_route_summary_ignoring_client_input(
+        self, mock_get_conn, mock_fetch_weather, mock_build_summary,
+        mock_badges, mock_get_user, mock_auth,
+    ):
+        waypoints = [{"lat": 47.65, "lng": -122.32, "ts": 0}]
+        columns = self._run_columns()
+        row_values = ["run-1", "user-1", None, None, 1000, 300, 300.0,
+                      "Up and back through Eastlake", waypoints, None, None, None, None]
+        conn = FakeConn(columns, tuple(row_values))
+        mock_get_conn.return_value = conn
+
+        req = self._make_request({
+            "distance_meters": 1000, "duration_seconds": 300, "waypoints": waypoints,
+            "name": "My Custom Name",
+        })
+        resp = function_app.create_run(req)
+
+        self.assertEqual(resp.status_code, 201)
+        body = json.loads(resp.get_body())
+        self.assertEqual(body["route_summary"], "Up and back through Eastlake")
+        # name column (index 6) must match route_summary column (index 9),
+        # never the client-supplied "name" from the request body.
+        self.assertEqual(conn.last_insert_params[6], "Up and back through Eastlake")
+        self.assertEqual(conn.last_insert_params[6], conn.last_insert_params[9])
 
 
 class TestMaybeJson(unittest.TestCase):

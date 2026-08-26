@@ -355,7 +355,6 @@ def create_run(req: func.HttpRequest) -> func.HttpResponse:
     distance = body.get("distance_meters", 0)
     duration = body.get("duration_seconds", 0)
     waypoints = body.get("waypoints", [])
-    name = body.get("name")
     if distance <= 0 or duration <= 0:
         return err("distance_meters and duration_seconds required")
     avg_pace = duration / (distance / 1000) if distance > 0 else None
@@ -386,7 +385,7 @@ def create_run(req: func.HttpRequest) -> func.HttpResponse:
             "INSERT INTO runs (user_id, started_at, ended_at, distance_meters, duration_seconds, "
             "avg_pace_seconds_per_km, name, waypoints, weather_json, route_summary, route_thumbnail) "
             "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *",
-            (user["id"], started_at, now, distance, duration, avg_pace, name, json.dumps(waypoints),
+            (user["id"], started_at, now, distance, duration, avg_pace, route_summary, json.dumps(waypoints),
              json.dumps(weather_data) if weather_data else None, route_summary, json.dumps(route_thumbnail)),
         )
         run = _row(cur, cur.fetchone())

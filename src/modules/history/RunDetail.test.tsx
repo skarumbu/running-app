@@ -22,7 +22,6 @@ const baseRun = {
   distance_meters: 4820,
   duration_seconds: 1721,
   avg_pace_seconds_per_km: 357,
-  name: null,
   waypoints: [{ lat: 47.65, lng: -122.32, ts: 0 }, { lat: 47.651, lng: -122.321, ts: 1 }],
   badges_earned: [],
   route_summary: 'Up and back through Eastlake',

@@ -233,15 +233,6 @@
   font-weight: 700;
 }
 
-.detail-title {
-  font-family: var(--font-display);
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  color: var(--text);
-  margin-top: 4px;
-}
-
 .weather-hero {
   background: var(--card);
   border: 1px solid var(--line);

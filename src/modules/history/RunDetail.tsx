@@ -19,7 +19,6 @@ interface RunFull {
   distance_meters: number;
   duration_seconds: number;
   avg_pace_seconds_per_km: number;
-  name: string | null;
   waypoints: Waypoint[];
   badges_earned: string[];
   route_summary: string;
@@ -135,7 +134,6 @@ export default function RunDetail() {
 
       <div className="detail-title-section">
         <div className="detail-title-when">{when}</div>
-        <div className="detail-title">{run.name || 'Run'}</div>
       </div>
 
       <div className="weather-hero">

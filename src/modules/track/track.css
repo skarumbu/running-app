@@ -337,20 +337,6 @@
   font-weight: 700;
 }
 
-.run-name-input {
-  width: 100%;
-  padding: 14px 16px;
-  border: 1px solid var(--line-strong);
-  border-radius: 14px;
-  font-size: 15px;
-  font-family: var(--font-ui);
-  background: var(--card);
-  color: var(--text);
-  outline: none;
-}
-.run-name-input::placeholder { color: var(--text-faint); }
-.run-name-input:focus { border-color: var(--primary); }
-
 .save-error {
   color: #E84545;
   font-size: 13px;

@@ -54,7 +54,6 @@ const CheckIcon = () => (
 
 export default function TrackTab() {
   const [phase, setPhase] = useState<RunState>('idle');
-  const [runName, setRunName] = useState('');
   const [saveError, setSaveError] = useState<string | null>(null);
   const [unit, setUnit] = useState<Unit>(() => {
     if (typeof window !== 'undefined') {
@@ -111,7 +110,6 @@ export default function TrackTab() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: runName.trim() || null,
           duration_seconds: timer.elapsedSeconds,
           distance_meters: gps.distanceMeters,
           waypoints: gps.waypoints,
@@ -180,14 +178,6 @@ export default function TrackTab() {
         </div>
 
         <TrackMap waypoints={gps.waypoints} />
-
-        <input
-          className="run-name-input"
-          type="text"
-          placeholder="Name this run (optional)"
-          value={runName}
-          onChange={e => setRunName(e.target.value)}
-        />
 
         {saveError && <p className="save-error">{saveError}</p>}
 
