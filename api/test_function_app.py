@@ -34,6 +34,10 @@ class TestWeatherCodeMapping(unittest.TestCase):
         condition, icon = weather_code_to_condition(61)
         self.assertEqual(icon, "rain")
 
+    def test_freezing_drizzle_codes(self):
+        self.assertEqual(weather_code_to_condition(56), ("Light freezing drizzle", "rain"))
+        self.assertEqual(weather_code_to_condition(57), ("Freezing drizzle", "rain"))
+
     def test_thunderstorm_code(self):
         condition, icon = weather_code_to_condition(95)
         self.assertEqual(icon, "storm")

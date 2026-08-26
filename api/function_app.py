@@ -86,6 +86,8 @@ WEATHER_CODE_MAP = {
     51: ("Light drizzle", "rain"),
     53: ("Drizzle", "rain"),
     55: ("Heavy drizzle", "rain"),
+    56: ("Light freezing drizzle", "rain"),
+    57: ("Freezing drizzle", "rain"),
     61: ("Light rain", "rain"),
     63: ("Rain", "rain"),
     65: ("Heavy rain", "rain"),
