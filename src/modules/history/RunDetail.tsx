@@ -2,8 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../AuthContext';
 import RouteMap from './RouteMap';
+import WeatherIcon, { WeatherIconKey } from './WeatherIcon';
 import { Waypoint } from '../../hooks/useGPS';
 import './history.css';
+
+interface WeatherSummary {
+  temp_f: number;
+  condition: string;
+  icon: WeatherIconKey;
+}
 
 interface RunFull {
   id: string;
@@ -15,6 +22,9 @@ interface RunFull {
   name: string | null;
   waypoints: Waypoint[];
   badges_earned: string[];
+  route_summary: string;
+  weather_json: WeatherSummary | null;
+  note: string | null;
 }
 
 const BADGE_LABELS: Record<string, string> = {
@@ -54,6 +64,12 @@ const MoreIcon = () => (
   </svg>
 );
 
+const ChevronIcon = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+    <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+
 export default function RunDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -61,6 +77,10 @@ export default function RunDetail() {
   const [run, setRun] = useState<RunFull | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [numbersOpen, setNumbersOpen] = useState(false);
+  const [editingNote, setEditingNote] = useState(false);
+  const [noteDraft, setNoteDraft] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
 
   useEffect(() => {
     apiFetch(`/api/runs/${id}`)
@@ -76,6 +96,31 @@ export default function RunDetail() {
   const d = new Date(run.started_at);
   const when = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) +
     ' · ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+  function startEditingNote() {
+    setNoteDraft(run!.note || '');
+    setEditingNote(true);
+  }
+
+  async function saveNote() {
+    setSavingNote(true);
+    try {
+      const r = await apiFetch(`/api/runs/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: noteDraft || null }),
+      });
+      if (!r.ok) throw new Error(`${r.status}`);
+      const updated = await r.json();
+      setRun(updated);
+      setEditingNote(false);
+    } catch (e) {
+      // Leave edit mode open so the user can retry; error state isn't
+      // fatal to the page since the rest of the run data already loaded.
+    } finally {
+      setSavingNote(false);
+    }
+  }
 
   return (
     <div className="run-detail">
@@ -93,16 +138,43 @@ export default function RunDetail() {
         <div className="detail-title">{run.name || 'Run'}</div>
       </div>
 
-      <div className="detail-hero">
-        <div>
-          <div className="detail-hero-dist-value">{(run.distance_meters / 1000).toFixed(2)}</div>
-          <div className="detail-hero-dist-unit">km</div>
+      <div className="weather-hero">
+        <div className="weather-hero-top">
+          <div className="weather-hero-route">{run.route_summary}</div>
+          {run.weather_json && (
+            <div className="weather-hero-temp">
+              <WeatherIcon icon={run.weather_json.icon} size={20} />
+              {run.weather_json.temp_f}&deg;
+            </div>
+          )}
         </div>
-        <div className="detail-hero-divider" />
-        <div>
-          <div className="detail-hero-time-value">{formatDuration(run.duration_seconds)}</div>
-          <div className="detail-hero-time-unit">Time</div>
-        </div>
+        {run.weather_json && <div className="weather-hero-condition">{run.weather_json.condition}</div>}
+      </div>
+
+      <div className="note-card">
+        <div className="note-label">Note</div>
+        {editingNote ? (
+          <div className="note-edit">
+            <textarea
+              className="note-textarea"
+              value={noteDraft}
+              onChange={e => setNoteDraft(e.target.value)}
+              placeholder="How did this run feel?"
+            />
+            <div className="note-edit-actions">
+              <button className="note-cancel-btn" onClick={() => setEditingNote(false)} disabled={savingNote}>Cancel</button>
+              <button className="note-save-btn" onClick={saveNote} disabled={savingNote}>Save</button>
+            </div>
+          </div>
+        ) : run.note ? (
+          <div className="note-text" onClick={startEditingNote}>{run.note}</div>
+        ) : (
+          <div className="note-empty" onClick={startEditingNote}>Tap to add a note about this run &rsaquo;</div>
+        )}
+      </div>
+
+      <div className="detail-map-wrapper">
+        <RouteMap waypoints={run.waypoints} />
       </div>
 
       {run.badges_earned.length > 0 && (
@@ -113,19 +185,33 @@ export default function RunDetail() {
         </div>
       )}
 
-      <div className="detail-map-wrapper">
-        <RouteMap waypoints={run.waypoints} />
-      </div>
-
-      <div className="detail-stat-grid">
-        <div className="detail-stat-card">
-          <div className="detail-stat-label">Avg pace</div>
-          <div className="detail-stat-value">{formatPace(run.avg_pace_seconds_per_km)} /km</div>
-        </div>
-        <div className="detail-stat-card">
-          <div className="detail-stat-label">Distance</div>
-          <div className="detail-stat-value">{(run.distance_meters / 1000).toFixed(2)} km</div>
-        </div>
+      <div className={`numbers-section${numbersOpen ? ' open' : ''}`}>
+        <button className="numbers-toggle" onClick={() => setNumbersOpen(o => !o)}>
+          <span className="numbers-toggle-label">By the Numbers</span>
+          <span className="numbers-chevron"><ChevronIcon /></span>
+        </button>
+        {numbersOpen && (
+          <div className="numbers-body">
+            <div className="detail-stat-grid">
+              <div className="detail-stat-card">
+                <div className="detail-stat-label">Distance</div>
+                <div className="detail-stat-value">{(run.distance_meters / 1000).toFixed(2)} km</div>
+              </div>
+              <div className="detail-stat-card">
+                <div className="detail-stat-label">Time</div>
+                <div className="detail-stat-value">{formatDuration(run.duration_seconds)}</div>
+              </div>
+              <div className="detail-stat-card">
+                <div className="detail-stat-label">Avg pace</div>
+                <div className="detail-stat-value">{formatPace(run.avg_pace_seconds_per_km)} /km</div>
+              </div>
+              <div className="detail-stat-card">
+                <div className="detail-stat-label">Weather</div>
+                <div className="detail-stat-value">{run.weather_json ? `${run.weather_json.temp_f}°F` : '—'}</div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

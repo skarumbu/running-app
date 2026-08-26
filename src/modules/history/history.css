@@ -242,59 +242,171 @@
   margin-top: 4px;
 }
 
-.detail-hero {
+.weather-hero {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 18px 20px;
+  margin: 0 22px;
+}
+
+.weather-hero-top {
   display: flex;
-  align-items: baseline;
-  gap: 18px;
-  padding: 0 22px;
-  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
 }
 
-.detail-hero-dist-value {
-  font-family: var(--font-mono);
+.weather-hero-route {
+  font-family: var(--font-display);
+  font-size: 20px;
   font-weight: 700;
-  font-size: 56px;
-  letter-spacing: -0.04em;
   color: var(--text);
-  line-height: 0.95;
+  line-height: 1.25;
+}
+
+.weather-hero-temp {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  flex-shrink: 0;
   font-variant-numeric: tabular-nums;
 }
 
-.detail-hero-dist-unit {
+.weather-hero-condition {
   font-family: var(--font-ui);
-  font-size: 11px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
+  font-size: 13px;
   color: var(--text-muted);
-  font-weight: 700;
   margin-top: 4px;
 }
 
-.detail-hero-divider {
-  width: 1px;
-  height: 50px;
-  background: var(--line);
-  align-self: center;
+.note-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 14px 16px;
+  margin: 0 22px;
 }
 
-.detail-hero-time-value {
-  font-family: var(--font-mono);
+.note-label {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
   font-weight: 700;
-  font-size: 32px;
-  letter-spacing: -0.03em;
+  margin-bottom: 6px;
+}
+
+.note-text {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
   color: var(--text);
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
+  cursor: pointer;
 }
 
-.detail-hero-time-unit {
+.note-empty {
   font-family: var(--font-ui);
-  font-size: 11px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--text-muted);
+  font-size: 14px;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+
+.note-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.note-textarea {
+  appearance: none;
+  background: var(--card2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  padding: 10px 12px;
+  min-height: 72px;
+  resize: vertical;
+}
+
+.note-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.note-cancel-btn,
+.note-save-btn {
+  appearance: none;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-family: var(--font-ui);
+  font-size: 13px;
   font-weight: 700;
-  margin-top: 4px;
+  cursor: pointer;
+}
+
+.note-cancel-btn {
+  background: var(--card2);
+  color: var(--text-muted);
+}
+
+.note-save-btn {
+  background: var(--primary);
+  color: var(--primary-ink);
+}
+
+.numbers-section {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  margin: 0 22px;
+  overflow: hidden;
+}
+
+.numbers-toggle {
+  appearance: none;
+  background: none;
+  border: none;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.numbers-toggle-label {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.numbers-chevron {
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+  display: flex;
+}
+
+.numbers-section.open .numbers-chevron {
+  transform: rotate(90deg);
+}
+
+.numbers-body {
+  padding: 0 16px 16px;
+}
+
+.numbers-body .detail-stat-grid {
+  padding: 0;
 }
 
 .detail-map-wrapper {
