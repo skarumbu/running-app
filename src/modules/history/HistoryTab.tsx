@@ -2,7 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../AuthContext';
 import DistanceChart from './DistanceChart';
+import RouteThumbnail from './RouteThumbnail';
+import WeatherIcon, { WeatherIconKey } from './WeatherIcon';
 import './history.css';
+
+export interface WeatherSummary {
+  temp_f: number;
+  condition: string;
+  icon: WeatherIconKey;
+}
 
 export interface Run {
   id: string;
@@ -12,21 +20,9 @@ export interface Run {
   duration_seconds: number;
   avg_pace_seconds_per_km: number;
   name: string | null;
-}
-
-function formatPace(secsPerKm: number): string {
-  if (!secsPerKm) return '--:--';
-  const m = Math.floor(secsPerKm / 60);
-  const s = Math.floor(secsPerKm % 60);
-  return `${m}:${String(s).padStart(2, '0')}`;
-}
-
-function formatDuration(secs: number): string {
-  const h = Math.floor(secs / 3600);
-  const m = Math.floor((secs % 3600) / 60);
-  const s = secs % 60;
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m ${s}s`;
+  route_summary: string;
+  weather_json: WeatherSummary | null;
+  route_thumbnail: { lat: number; lng: number }[];
 }
 
 const ChevronIcon = () => (
@@ -91,21 +87,22 @@ export default function HistoryTab() {
       <div className="run-list">
         {runs.map(run => {
           const d = new Date(run.started_at);
-          const day = d.getDate();
-          const weekday = d.toLocaleDateString('en-US', { weekday: 'short' });
+          const dateLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
           return (
             <button key={run.id} className="run-card" onClick={() => navigate(`/history/${run.id}`)}>
-              <div className="run-card-date">
-                <div className="run-card-day">{day}</div>
-                <div className="run-card-weekday">{weekday}</div>
+              <div className="run-card-thumb">
+                <RouteThumbnail points={run.route_thumbnail} />
               </div>
               <div className="run-card-body">
-                <div className="run-card-distance">
-                  {(run.distance_meters / 1000).toFixed(2)} <span>km</span>
-                </div>
-                <div className="run-card-meta">
-                  {formatDuration(run.duration_seconds)} · {formatPace(run.avg_pace_seconds_per_km)} /km
-                  {run.name ? ` · ${run.name}` : ''}
+                <div className="run-card-route">{run.route_summary}</div>
+                <div className="run-card-meta-row">
+                  {run.weather_json && (
+                    <span className="run-card-weather">
+                      <WeatherIcon icon={run.weather_json.icon} />
+                      {run.weather_json.temp_f}&deg;
+                    </span>
+                  )}
+                  <span className="run-card-date">{dateLabel}</span>
                 </div>
               </div>
               <div className="run-card-chevron"><ChevronIcon /></div>

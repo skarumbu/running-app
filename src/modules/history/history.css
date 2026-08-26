@@ -97,12 +97,11 @@
   background: var(--card);
   border-radius: 16px;
   border: 1px solid var(--line);
-  padding: 14px 16px;
+  padding: 12px;
   cursor: pointer;
-  display: grid;
-  grid-template-columns: auto 1fr auto auto;
-  gap: 14px;
+  display: flex;
   align-items: center;
+  gap: 14px;
   text-align: left;
   color: var(--text);
   appearance: none;
@@ -111,54 +110,52 @@
 }
 .run-card:hover { border-color: var(--line-strong); }
 
-.run-card-date {
+.run-card-thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  background: var(--surface);
+  flex-shrink: 0;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
   align-items: center;
-  border-right: 1px solid var(--line);
-  padding-right: 14px;
-  min-width: 40px;
+  justify-content: center;
 }
 
-.run-card-day {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 18px;
-  color: var(--text);
-  line-height: 1;
+.run-card-body {
+  flex: 1;
+  min-width: 0;
 }
 
-.run-card-weekday {
+.run-card-route {
   font-family: var(--font-ui);
-  font-size: 9px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  font-weight: 700;
-}
-
-.run-card-body {}
-
-.run-card-distance {
-  font-family: var(--font-mono);
-  font-weight: 700;
-  font-size: 19px;
-  letter-spacing: -0.02em;
+  font-weight: 600;
+  font-size: 15px;
   color: var(--text);
-  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.run-card-distance span {
+.run-card-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.run-card-weather {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-ui);
   font-size: 12px;
   color: var(--text-muted);
 }
 
-.run-card-meta {
+.run-card-date {
   font-family: var(--font-ui);
-  font-size: 11px;
-  color: var(--text-muted);
-  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-faint);
 }
 
 .run-card-chevron {
