@@ -36,3 +36,7 @@ api/*.dist-info/
 # Env files
 .env
 
+# Claude Code brainstorming companion sessions and design specs (local only, not committed)
+.superpowers/
+docs/superpowers/
+
