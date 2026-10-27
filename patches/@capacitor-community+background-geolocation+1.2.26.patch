@@ -1,0 +1,26 @@
+diff --git a/node_modules/@capacitor-community/background-geolocation/ios/Plugin/Swift/Plugin.swift b/node_modules/@capacitor-community/background-geolocation/ios/Plugin/Swift/Plugin.swift
+index d4a5965..ad48b7b 100644
+--- a/node_modules/@capacitor-community/background-geolocation/ios/Plugin/Swift/Plugin.swift
++++ b/node_modules/@capacitor-community/background-geolocation/ios/Plugin/Swift/Plugin.swift
+@@ -94,15 +94,12 @@ public class BackgroundGeolocation: CAPPlugin,
+             )
+             let manager = watcher.locationManager
+             manager.delegate = self
+-            let externalPower = [
+-                .full,
+-                .charging
+-            ].contains(UIDevice.current.batteryState)
+-            manager.desiredAccuracy = (
+-                externalPower
+-                ? kCLLocationAccuracyBestForNavigation
+-                : kCLLocationAccuracyBest
+-            )
++            // running-app patch: ~10m accuracy lets iOS duty-cycle the GPS
++            // radio instead of holding it at full power, and the fitness
++            // activity type tunes its filtering for on-foot movement. The
++            // route only needs to be roughly right.
++            manager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
++            manager.activityType = .fitness
+             var distanceFilter = call.getDouble("distanceFilter")
+             // It appears that setting manager.distanceFilter to 0 can prevent
+             // subsequent location updates. See issue #88.

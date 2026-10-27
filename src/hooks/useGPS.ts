@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import type { BackgroundGeolocationPlugin, Location as BGLocation } from '@capacitor-community/background-geolocation';
 
@@ -20,6 +20,19 @@ interface GPSState {
   error: string | null;
   acquiring: boolean;
 }
+
+// Battery over precision: the route only needs to be recognizable and the
+// distance roughly right. See docs/battery.md.
+const MAX_ACCURACY_M = 100; // coarser than this is a cell-tower guess, not a position
+const NATIVE_DISTANCE_FILTER_M = 30; // iOS wakes us at most every ~30m of movement
+// Store a point once we've moved MIN_SPACING_M from the last stored one, or
+// after MIN_INTERVAL_MS if we've at least crept SLOW_SPACING_M (walking, hills).
+// Slightly under the native filter so its own estimate never gets dropped.
+const MIN_SPACING_M = 25;
+const MIN_INTERVAL_MS = 15000;
+const SLOW_SPACING_M = 10;
+
+const isHidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
 
 function haversineMeters(a: Waypoint, b: Waypoint): number {
   const R = 6371000;
@@ -47,23 +60,43 @@ export function useGPS() {
   const nativeWatcherIdRef = useRef<string | null>(null); // native plugin watcher id
   const waypointsRef = useRef<Waypoint[]>([]);
   const distanceRef = useRef(0);
+  const coordsRef = useRef<GeolocationCoordinates | null>(null);
 
-  const recordFix = useCallback((wp: Waypoint, coords: GeolocationCoordinates) => {
-    const prev = waypointsRef.current[waypointsRef.current.length - 1];
-    if (prev) {
-      distanceRef.current += haversineMeters(prev, wp);
-    }
-    waypointsRef.current = [...waypointsRef.current, wp];
-
+  // Push the refs into React state. Skipped while the app is backgrounded
+  // (screen locked) so location callbacks don't re-render the map nobody can
+  // see; the visibilitychange listener below catches up on return.
+  const flush = useCallback(() => {
     setState(s => ({
       ...s,
       waypoints: waypointsRef.current,
       distanceMeters: distanceRef.current,
-      currentCoords: coords,
+      currentCoords: coordsRef.current,
       acquiring: false,
       error: null,
     }));
   }, []);
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (!isHidden() && waypointsRef.current.length > 0) flush();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, [flush]);
+
+  const recordFix = useCallback((wp: Waypoint, coords: GeolocationCoordinates) => {
+    const prev = waypointsRef.current[waypointsRef.current.length - 1];
+    if (prev) {
+      const d = haversineMeters(prev, wp);
+      const keep = d >= MIN_SPACING_M || (wp.ts - prev.ts >= MIN_INTERVAL_MS && d >= SLOW_SPACING_M);
+      if (!keep) return;
+      distanceRef.current += d;
+    }
+    waypointsRef.current = [...waypointsRef.current, wp];
+    coordsRef.current = coords;
+
+    if (!isHidden()) flush();
+  }, [flush]);
 
   const start = useCallback(() => {
     setState(s => ({ ...s, acquiring: true, error: null }));
@@ -74,14 +107,14 @@ export function useGPS() {
           backgroundMessage: 'Tracking your run in the background.',
           backgroundTitle: 'Running App',
           requestPermissions: true,
-          distanceFilter: 0,
+          distanceFilter: NATIVE_DISTANCE_FILTER_M,
         },
         (location?: BGLocation, error?: Error) => {
           if (error || !location) {
             setState(s => ({ ...s, error: error?.message ?? 'Location error', acquiring: false }));
             return;
           }
-          if (location.accuracy > 30) return; // discard low-accuracy fixes
+          if (location.accuracy > MAX_ACCURACY_M) return;
 
           const wp: Waypoint = {
             lat: location.latitude,
@@ -105,7 +138,7 @@ export function useGPS() {
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
-        if (pos.coords.accuracy > 30) return; // discard low-accuracy fixes
+        if (pos.coords.accuracy > MAX_ACCURACY_M) return;
 
         const wp: Waypoint = {
           lat: pos.coords.latitude,
@@ -137,6 +170,7 @@ export function useGPS() {
     stop();
     waypointsRef.current = [];
     distanceRef.current = 0;
+    coordsRef.current = null;
     setState({
       waypoints: [],
       distanceMeters: 0,

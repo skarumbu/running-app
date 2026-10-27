@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../AuthContext';
 import { useGPS } from '../../hooks/useGPS';
 import { useRunTimer } from '../../hooks/useRunTimer';
-import { useWakeLock } from '../../hooks/useWakeLock';
 import { showRunTrackingNotification, clearRunTrackingNotification } from '../../lib/runNotification';
 import TrackMap from './TrackMap';
 import './track.css';
@@ -65,7 +64,6 @@ export default function TrackTab() {
   const { user, apiFetch } = useAuth();
   const gps = useGPS();
   const timer = useRunTimer();
-  const wakeLock = useWakeLock();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -78,7 +76,6 @@ export default function TrackTab() {
     setPhase('running');
     gps.start();
     timer.start();
-    await wakeLock.acquire();
     showRunTrackingNotification();
   };
 
@@ -92,13 +89,11 @@ export default function TrackTab() {
     setPhase('running');
     timer.resume();
     gps.start();
-    await wakeLock.acquire();
   };
 
   const handleFinish = () => {
     timer.pause();
     gps.stop();
-    wakeLock.release();
     clearRunTrackingNotification();
     setPhase('saving');
   };
