@@ -32,7 +32,7 @@ func start         # Requires Azure Functions Core Tools v4 + api/local.settings
 - **`/modules/track/`** — GPS run tracker: start/pause/finish state machine, live metrics
 - **`/modules/history/`** — Run list, weekly distance chart (Recharts), per-run detail with Leaflet route map
 - **`/modules/profile/`** — Personal bests grid, badge grid
-- **`/hooks/useGPS.ts`** — `watchPosition` wrapper, Haversine distance, accuracy filtering (>30m discarded)
+- **`/hooks/useGPS.ts`** — `watchPosition` wrapper, Haversine distance, coarse accuracy filter (>100m discarded), ~25m waypoint thinning, no re-renders while backgrounded
 - **`/hooks/useRunTimer.ts`** — Elapsed time with pause/resume support
 
 ### API (`/api/function_app.py`)
