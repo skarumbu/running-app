@@ -1,46 +1,62 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
+// Elapsed time is derived from timestamps (accumulated ms plus the current
+// segment), not counted by the interval. The interval only refreshes the
+// display, and only while the page is visible: no once-a-second re-render
+// with the screen locked. Coming back to the app recomputes immediately.
 export function useRunTimer() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [running, setRunning] = useState(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(0);
-  const accumulatedRef = useRef<number>(0);
+  const accumulatedMsRef = useRef<number>(0);
+  const runningRef = useRef(false);
+
+  const compute = useCallback(() => {
+    const live = runningRef.current ? Date.now() - startTimeRef.current : 0;
+    return Math.floor((accumulatedMsRef.current + live) / 1000);
+  }, []);
 
   const start = useCallback(() => {
     startTimeRef.current = Date.now();
+    runningRef.current = true;
     setRunning(true);
   }, []);
 
   const pause = useCallback(() => {
-    accumulatedRef.current += Math.floor((Date.now() - startTimeRef.current) / 1000);
+    // Finish calls pause() even when already paused; don't count that gap twice.
+    if (!runningRef.current) return;
+    accumulatedMsRef.current += Date.now() - startTimeRef.current;
+    runningRef.current = false;
     setRunning(false);
+    setElapsedSeconds(Math.floor(accumulatedMsRef.current / 1000));
   }, []);
 
-  const resume = useCallback(() => {
-    startTimeRef.current = Date.now();
-    setRunning(true);
-  }, []);
+  const resume = start;
 
   const reset = useCallback(() => {
-    accumulatedRef.current = 0;
+    accumulatedMsRef.current = 0;
+    runningRef.current = false;
     setRunning(false);
     setElapsedSeconds(0);
   }, []);
 
   useEffect(() => {
-    if (running) {
-      intervalRef.current = setInterval(() => {
-        const live = Math.floor((Date.now() - startTimeRef.current) / 1000);
-        setElapsedSeconds(accumulatedRef.current + live);
-      }, 1000);
-    } else {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    }
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+    if (!running) return;
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const sync = () => {
+      if (interval) clearInterval(interval);
+      interval = null;
+      if (document.visibilityState === 'hidden') return;
+      setElapsedSeconds(compute());
+      interval = setInterval(() => setElapsedSeconds(compute()), 1000);
     };
-  }, [running]);
+    sync();
+    document.addEventListener('visibilitychange', sync);
+    return () => {
+      document.removeEventListener('visibilitychange', sync);
+      if (interval) clearInterval(interval);
+    };
+  }, [running, compute]);
 
   return { elapsedSeconds, running, start, pause, resume, reset };
 }
