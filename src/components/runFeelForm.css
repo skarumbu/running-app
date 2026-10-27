@@ -1,0 +1,77 @@
+/* ── Five-level feel picker ── */
+.feel-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.feel-btn {
+  appearance: none;
+  border: none;
+  border-radius: 18px;
+  padding: 12px 2px 9px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--bg);
+  min-width: 0;
+}
+.feel-btn[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+
+.blob {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  transition: transform 0.15s;
+}
+.feel-btn[aria-pressed="true"] .blob { transform: scale(1.15); }
+
+/* ── Gear with comfort control ── */
+.gear-comfort {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+}
+
+.gear-row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+.gear-row-text { min-width: 0; }
+.gear-row-text b {
+  display: block;
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.comfort { display: flex; gap: 4px; }
+.comfort button {
+  appearance: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  border: 2px solid var(--line);
+  background: var(--surface);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+  color: var(--ink);
+}
+.comfort button[aria-pressed="true"] { border-color: transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  .blob { transition: none; }
+}
