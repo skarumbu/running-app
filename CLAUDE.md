@@ -34,7 +34,6 @@ func start         # Requires Azure Functions Core Tools v4 + api/local.settings
 - **`/modules/profile/`** — Personal bests grid, badge grid
 - **`/hooks/useGPS.ts`** — `watchPosition` wrapper, Haversine distance, accuracy filtering (>30m discarded)
 - **`/hooks/useRunTimer.ts`** — Elapsed time with pause/resume support
-- **`/hooks/useWakeLock.ts`** — Screen Wake Lock API (keeps screen on during run)
 
 ### API (`/api/function_app.py`)
 Python Azure Functions v2. Auth via `Authorization: Bearer {google_id_token}` header. Token verified against `oauth2.googleapis.com/tokeninfo`. Any authenticated Google account is accepted; users are auto-registered on first request.
