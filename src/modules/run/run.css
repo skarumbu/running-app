@@ -1,0 +1,77 @@
+/* ── During the run ── */
+.run-during { min-height: 100%; }
+
+.going-card {
+  background: var(--a1);
+  color: var(--on-a1);
+  border-radius: 28px;
+  padding: 22px 20px;
+}
+
+.going-ask {
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.going-word {
+  font-family: var(--font-display);
+  font-size: 40px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.going-hint {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.going-chip {
+  appearance: none;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 800;
+  border: 2px solid currentColor;
+  background: transparent;
+  color: inherit;
+  border-radius: 999px;
+  padding: 8px 14px;
+  min-height: 40px;
+  cursor: pointer;
+}
+.going-chip:active { background: var(--on-a1); color: var(--a1); }
+
+.np-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Time and distance are kept small and quiet; tap to switch km/mi. */
+.quiet-stats {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 4px 2px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+  width: 100%;
+}
+
+.during-controls {
+  margin-top: auto;
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 10px;
+  padding-top: 8px;
+}
+
+/* ── How was it? ── */
+.along-the-way { margin: 8px 0 0; }
+
+.discard-btn { align-self: center; }

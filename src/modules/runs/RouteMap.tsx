@@ -5,6 +5,12 @@ import { Waypoint } from '../../hooks/useGPS';
 
 interface Props { waypoints: Waypoint[]; }
 
+// Leaflet draws with SVG attributes, which can't take var(); read the
+// palette tokens instead so the map follows the theme.
+function token(name: string): string {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
 function FitBounds({ waypoints }: Props) {
   const map = useMap();
   useEffect(() => {
@@ -31,9 +37,9 @@ export default function RouteMap({ waypoints }: Props) {
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
       />
-      <Polyline positions={positions} color="#1a5c52" weight={4} />
-      <CircleMarker center={start} radius={7} pathOptions={{ color: '#27ae60', fillColor: '#27ae60', fillOpacity: 1 }} />
-      <CircleMarker center={finish} radius={7} pathOptions={{ color: '#c0392b', fillColor: '#c0392b', fillOpacity: 1 }} />
+      <Polyline positions={positions} pathOptions={{ color: token('--a1'), weight: 5 }} />
+      <CircleMarker center={start} radius={7} pathOptions={{ color: token('--surface'), weight: 3, fillColor: token('--a4'), fillOpacity: 1 }} />
+      <CircleMarker center={finish} radius={7} pathOptions={{ color: token('--surface'), weight: 3, fillColor: token('--ink'), fillOpacity: 1 }} />
       <FitBounds waypoints={waypoints} />
     </MapContainer>
   );

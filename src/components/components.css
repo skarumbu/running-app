@@ -1,0 +1,252 @@
+/* Shared building blocks used by every tab. Module-specific layout lives in
+   each module's own CSS file. */
+
+.page {
+  padding: 18px 20px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.stack { display: flex; flex-direction: column; gap: 14px; }
+.stack.tight { gap: 10px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.row.between { justify-content: space-between; flex-wrap: nowrap; }
+
+.eyebrow {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.h {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  margin: 4px 0 0;
+  color: var(--ink);
+}
+
+.h2 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--ink);
+  margin: 0;
+}
+
+.muted-line {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.card {
+  background: var(--surface);
+  border-radius: 22px;
+  padding: 16px;
+  box-shadow: 0 2px 0 var(--line);
+}
+
+/* ── Chips: toggles (button) and read-only tags (span) ── */
+.chip {
+  appearance: none;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 700;
+  border: 2px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 7px 13px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+}
+.chip[aria-pressed="true"] {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--surface);
+}
+.chip.small { font-size: 12px; padding: 5px 10px; min-height: 32px; }
+.chip.dashed { border-style: dashed; justify-content: center; }
+
+.tag {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 4px 9px;
+  background: var(--bg);
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  min-width: 0;
+}
+.tag-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  flex: none;
+}
+
+/* ── Buttons ── */
+.big-btn {
+  appearance: none;
+  border: none;
+  width: 100%;
+  height: 66px;
+  border-radius: 22px;
+  font-family: var(--font-ui);
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--on-a1);
+  background: var(--a1);
+  box-shadow: 0 5px 0 var(--a1-deep);
+  cursor: pointer;
+  flex: none;
+}
+.big-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--a1-deep); }
+.big-btn:disabled { opacity: 0.6; cursor: default; }
+.big-btn.ink { background: var(--ink); color: var(--surface); box-shadow: 0 5px 0 var(--ink-deep); }
+.big-btn.ink:active { box-shadow: 0 2px 0 var(--ink-deep); }
+.big-btn.outline {
+  background: var(--surface);
+  color: var(--ink);
+  border: 2px solid var(--line);
+  box-shadow: 0 5px 0 var(--line);
+}
+
+.link-btn {
+  appearance: none;
+  border: none;
+  background: none;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 6px 0;
+  text-decoration: none;
+}
+.link-btn.strong { color: var(--ink); }
+
+.pill-btn {
+  appearance: none;
+  border: 2px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 7px 14px;
+  cursor: pointer;
+  flex: none;
+}
+
+/* ── Text inputs ── */
+.txt {
+  width: 100%;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--bg);
+  border: 2px solid transparent;
+  border-radius: 14px;
+  padding: 11px 13px;
+}
+.txt::placeholder { color: var(--muted); }
+.txt:focus { outline: none; border-color: var(--a3); }
+textarea.txt { resize: none; min-height: 74px; line-height: 1.45; }
+.txt.small { font-size: 13px; padding: 8px 11px; border-radius: 12px; }
+
+.error-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--danger);
+  margin: 0;
+}
+
+/* ── Weather card ── */
+.wx {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  border-radius: 20px;
+  padding: 14px;
+}
+.wx-icon { flex: none; display: grid; place-items: center; }
+.wx-temp {
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1;
+}
+.wx-words { display: block; font-size: 13px; font-weight: 700; margin-top: 3px; }
+.wx.compact { padding: 12px; }
+.wx.compact .wx-temp { font-size: 26px; }
+
+/* ── Gear icon tile ── */
+.gear-ic {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+/* ── Soundtrack row ── */
+.np { display: grid; grid-template-columns: 54px 1fr; gap: 12px; align-items: center; }
+.np > div { min-width: 0; }
+.cover {
+  width: 54px;
+  height: 54px;
+  border-radius: 14px;
+  position: relative;
+  overflow: hidden;
+}
+.cover::after {
+  content: "";
+  position: absolute;
+  inset: 30%;
+  border-radius: 50%;
+  background: var(--surface);
+  opacity: 0.85;
+}
+
+.state-msg {
+  padding: 64px 24px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 600;
+}
+.state-msg.error { color: var(--danger); }
+
+button:focus-visible, a:focus-visible, .chip:focus-visible {
+  outline: 2px solid var(--a3);
+  outline-offset: 2px;
+}

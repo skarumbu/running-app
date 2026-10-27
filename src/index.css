@@ -1,16 +1,36 @@
+/* Sunrise palette. Every colour in the app comes from these tokens, so a
+   different palette is a change to this block only. */
 :root {
-  --bg: #0E0E10;
-  --surface: #17171A;
-  --card: #1F1F23;
-  --card2: #28282E;
-  --line: rgba(255,255,255,0.07);
-  --line-strong: rgba(255,255,255,0.12);
-  --text: #F6F4EF;
-  --text-muted: #8A8A8E;
-  --text-faint: #555558;
-  --primary: #FF5A36;
-  --primary-ink: #FFFFFF;
-  --font-display: "Archivo", system-ui, sans-serif;
+  color-scheme: light;
+
+  --bg: #FFF6EA;
+  --surface: #FFFFFF;
+  --ink: #1C1633;
+  --muted: #776F8C;
+  --line: #F1E3D0;
+
+  /* Accents. Each feel, comfort level and gear item maps to one of these. */
+  --a1: #FF4F5E;
+  --a2: #FFC531;
+  --a3: #3DB9FF;
+  --a4: #2ED6A0;
+  --a5: #9B6BFF;
+
+  /* Text that reads on each accent. */
+  --on-a1: #FFFFFF;
+  --on-a2: var(--ink);
+  --on-a3: var(--ink);
+  --on-a4: var(--ink);
+  --on-a5: #FFFFFF;
+
+  /* The pressed-edge shadow under the primary buttons. */
+  --a1-deep: #C93644;
+  --ink-deep: #000000;
+
+  /* Error text on the light background. */
+  --danger: #C2253A;
+
+  --font-display: "Bricolage Grotesque", "Archivo", system-ui, sans-serif;
   --font-ui: "Archivo", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
@@ -22,12 +42,12 @@ body {
   font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
   background: var(--bg);
-  color: var(--text);
+  color: var(--ink);
   overscroll-behavior: none;
 }
 
 h1, h2, h3, h4 { margin: 0; }
-button { font-family: inherit; }
+button, input, textarea { font-family: inherit; }
 
 /* Hide scrollbars app-wide on mobile */
 ::-webkit-scrollbar { width: 0; height: 0; }
