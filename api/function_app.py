@@ -213,6 +213,204 @@ def build_route_summary(waypoints):
         return "Run"
 
 
+# Run-feel vocabularies. Stored as these keys; the display labels live in
+# src/lib/feel.ts, which mirrors these tuples. Keep the two in sync.
+BODY_TAGS = ("fresh_legs", "heavy_legs", "side_stitch", "tight_calves", "breathing_easy", "hungry", "in_the_zone")
+WEATHER_FEEL_TAGS = ("too_hot", "just_right", "chilly_start", "cold_hands", "windy", "loved_the_rain")
+MID_RUN_NOTE_KINDS = ("strong", "hurting", "great_song", "lovely_view")
+MUSIC_KINDS = ("playlist", "album", "podcast", "silence")
+MUSIC_HELPED = ("pushed", "background", "distracting")
+GEAR_KINDS = ("shoe", "top", "bottom", "headphones", "hat", "other")
+GEAR_COLORS = ("a1", "a2", "a3", "a4", "a5")
+
+MAX_NOTE_LEN = 2000
+MAX_SHORT_TEXT_LEN = 200
+MAX_GEAR_NAME_LEN = 80
+MAX_GEAR_NOTE_LEN = 500
+MAX_MID_RUN_NOTES = 200
+MAX_RUN_GEAR = 20
+MAX_RUN_SECONDS = 7 * 24 * 3600
+
+
+class ValidationError(ValueError):
+    pass
+
+
+def _int_in(value, lo, hi, field):
+    if isinstance(value, bool) or not isinstance(value, int) or not lo <= value <= hi:
+        raise ValidationError(f"{field} must be a whole number from {lo} to {hi}")
+    return value
+
+
+def _opt_text(value, field, max_len):
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValidationError(f"{field} must be a string")
+    value = value.strip()
+    if len(value) > max_len:
+        raise ValidationError(f"{field} must be at most {max_len} characters")
+    return value or None
+
+
+def _tags(value, allowed, field):
+    if not isinstance(value, list) or not all(isinstance(t, str) for t in value):
+        raise ValidationError(f"{field} must be a list of strings")
+    if any(t not in allowed for t in value):
+        raise ValidationError(f"{field} has an unknown value; allowed: {', '.join(allowed)}")
+    return list(dict.fromkeys(value))
+
+
+def _music(value):
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValidationError("music must be an object")
+    kind = value.get("kind")
+    if kind not in MUSIC_KINDS:
+        raise ValidationError(f"music.kind must be one of: {', '.join(MUSIC_KINDS)}")
+    helped = value.get("helped")
+    if helped is not None and helped not in MUSIC_HELPED:
+        raise ValidationError(f"music.helped must be one of: {', '.join(MUSIC_HELPED)}")
+    return {
+        "kind": kind,
+        "title": _opt_text(value.get("title"), "music.title", MAX_SHORT_TEXT_LEN),
+        "by": _opt_text(value.get("by"), "music.by", MAX_SHORT_TEXT_LEN),
+        "helped": helped,
+    }
+
+
+def _mid_run_notes(value):
+    if not isinstance(value, list) or len(value) > MAX_MID_RUN_NOTES:
+        raise ValidationError(f"mid_run_notes must be a list of at most {MAX_MID_RUN_NOTES} items")
+    notes = []
+    for item in value:
+        if not isinstance(item, dict) or item.get("kind") not in MID_RUN_NOTE_KINDS:
+            raise ValidationError(f"mid_run_notes[].kind must be one of: {', '.join(MID_RUN_NOTE_KINDS)}")
+        notes.append({
+            "kind": item["kind"],
+            "elapsed_s": _int_in(item.get("elapsed_s"), 0, MAX_RUN_SECONDS, "mid_run_notes[].elapsed_s"),
+        })
+    return notes
+
+
+def _run_gear(value):
+    if not isinstance(value, list) or len(value) > MAX_RUN_GEAR:
+        raise ValidationError(f"gear must be a list of at most {MAX_RUN_GEAR} items")
+    items = []
+    seen = set()
+    for item in value:
+        if not isinstance(item, dict):
+            raise ValidationError("gear[] items must be objects")
+        gear_id = item.get("gear_id")
+        if not isinstance(gear_id, str) or not 0 < len(gear_id) <= 64:
+            raise ValidationError("gear[].gear_id must be a gear id")
+        gear_id = gear_id.lower()
+        if gear_id in seen:
+            raise ValidationError("gear lists the same item twice")
+        seen.add(gear_id)
+        comfort = item.get("comfort")
+        items.append({
+            "gear_id": gear_id,
+            "comfort": None if comfort is None else _int_in(comfort, 1, 3, "gear[].comfort"),
+            "note": _opt_text(item.get("note"), "gear[].note", MAX_GEAR_NOTE_LEN),
+        })
+    return items
+
+
+def parse_run_feel_fields(body):
+    """Validate the run-feel fields present in a POST/PATCH body.
+
+    Returns only the keys the body contained, so PATCH can update a subset.
+    Raises ValidationError with a client-facing message.
+    """
+    fields = {}
+    if "feel" in body:
+        fields["feel"] = None if body["feel"] is None else _int_in(body["feel"], 1, 5, "feel")
+    if "body_tags" in body:
+        fields["body_tags"] = _tags(body["body_tags"], BODY_TAGS, "body_tags")
+    if "weather_feel" in body:
+        fields["weather_feel"] = _tags(body["weather_feel"], WEATHER_FEEL_TAGS, "weather_feel")
+    if "music" in body:
+        fields["music"] = _music(body["music"])
+    if "mid_run_notes" in body:
+        fields["mid_run_notes"] = _mid_run_notes(body["mid_run_notes"])
+    if "note" in body:
+        fields["note"] = _opt_text(body["note"], "note", MAX_NOTE_LEN)
+    if "gear" in body:
+        fields["gear"] = _run_gear(body["gear"])
+    return fields
+
+
+def parse_gear_fields(body, partial):
+    fields = {}
+    if not partial or "name" in body:
+        name = _opt_text(body.get("name"), "name", MAX_GEAR_NAME_LEN)
+        if not name:
+            raise ValidationError("name is required")
+        fields["name"] = name
+    if not partial or "kind" in body:
+        if body.get("kind") not in GEAR_KINDS:
+            raise ValidationError(f"kind must be one of: {', '.join(GEAR_KINDS)}")
+        fields["kind"] = body["kind"]
+    if not partial or "color" in body:
+        if body.get("color") not in GEAR_COLORS:
+            raise ValidationError(f"color must be one of: {', '.join(GEAR_COLORS)}")
+        fields["color"] = body["color"]
+    if partial and "retired" in body:
+        if not isinstance(body["retired"], bool):
+            raise ValidationError("retired must be true or false")
+        fields["retired"] = body["retired"]
+    return fields
+
+
+# Gear worn on a run, with each item's name/kind/color, as a JSON array
+# column. Correlated on runs.id so it works in SELECT and UPDATE ... RETURNING.
+RUN_GEAR_JSON = (
+    "COALESCE((SELECT json_agg(json_build_object("
+    "'gear_id', g.id, 'name', g.name, 'kind', g.kind, 'color', g.color, 'retired', g.retired, "
+    "'comfort', rg.comfort, 'note', rg.note) ORDER BY g.created_at) "
+    "FROM run_gear rg JOIN gear g ON g.id = rg.gear_id WHERE rg.run_id = runs.id), '[]'::json) AS gear"
+)
+
+GEAR_WITH_STATS = (
+    "SELECT g.id, g.name, g.kind, g.color, g.retired, g.created_at, "
+    "COUNT(rg.run_id) AS run_count, COUNT(rg.comfort) AS rated_count, "
+    "AVG(rg.comfort)::float AS avg_comfort "
+    "FROM gear g LEFT JOIN run_gear rg ON rg.gear_id = g.id "
+    "WHERE g.user_id = %s {extra} GROUP BY g.id ORDER BY g.retired, g.created_at"
+)
+
+
+def _normalize_run(run):
+    for col in ("weather_json", "route_thumbnail", "music", "mid_run_notes"):
+        if col in run:
+            run[col] = _maybe_json(run[col])
+    run["gear"] = _maybe_json(run.get("gear")) or []
+    return run
+
+
+def _owned_gear(cur, user_id, gear_ids):
+    """Map gear_id -> {name, kind, color, retired} for the ids this user owns."""
+    if not gear_ids:
+        return {}
+    cur.execute(
+        "SELECT id::text AS gear_id, name, kind, color, retired FROM gear "
+        "WHERE user_id = %s AND id::text = ANY(%s::text[])",
+        (user_id, list(gear_ids)),
+    )
+    return {row["gear_id"]: row for row in _rows(cur)}
+
+
+def _replace_run_gear(cur, run_id, items):
+    cur.execute("DELETE FROM run_gear WHERE run_id = %s", (run_id,))
+    for item in items:
+        cur.execute(
+            "INSERT INTO run_gear (run_id, gear_id, comfort, note) VALUES (%s, %s, %s, %s)",
+            (run_id, item["gear_id"], item["comfort"], item["note"]),
+        )
+
+
 def require_auth(req: func.HttpRequest):
     auth_header = req.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
@@ -307,13 +505,11 @@ def list_runs(req: func.HttpRequest) -> func.HttpResponse:
         cur = conn.cursor()
         cur.execute(
             "SELECT id, started_at, ended_at, distance_meters, duration_seconds, avg_pace_seconds_per_km, "
-            "name, route_summary, weather_json, route_thumbnail FROM runs WHERE user_id = %s ORDER BY started_at DESC",
+            "name, route_summary, weather_json, route_thumbnail, feel, body_tags, weather_feel, music, "
+            f"{RUN_GEAR_JSON} FROM runs WHERE user_id = %s ORDER BY started_at DESC",
             (user["id"],),
         )
-        rows = _rows(cur)
-        for row in rows:
-            row["weather_json"] = _maybe_json(row["weather_json"])
-            row["route_thumbnail"] = _maybe_json(row["route_thumbnail"])
+        rows = [_normalize_run(row) for row in _rows(cur)]
         cur.close()
         conn.close()
         return json_response(rows)
@@ -352,6 +548,13 @@ def create_run(req: func.HttpRequest) -> func.HttpResponse:
         body = req.get_json()
     except Exception:
         return err("Invalid JSON")
+    if not isinstance(body, dict):
+        return err("Invalid JSON")
+    try:
+        feel_fields = parse_run_feel_fields(body)
+    except ValidationError as e:
+        return err(str(e))
+    gear_items = feel_fields.get("gear", [])
     distance = body.get("distance_meters", 0)
     duration = body.get("duration_seconds", 0)
     waypoints = body.get("waypoints", [])
@@ -381,14 +584,26 @@ def create_run(req: func.HttpRequest) -> func.HttpResponse:
         conn = get_conn()
         user = get_or_create_user(conn, google_id, email, display_name)
         cur = conn.cursor()
+        owned = _owned_gear(cur, user["id"], [g["gear_id"] for g in gear_items])
+        if len(owned) != len(gear_items):
+            cur.close()
+            conn.close()
+            return err("gear includes an item that isn't yours")
+        music = feel_fields.get("music")
         cur.execute(
             "INSERT INTO runs (user_id, started_at, ended_at, distance_meters, duration_seconds, "
-            "avg_pace_seconds_per_km, name, waypoints, weather_json, route_summary, route_thumbnail) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *",
+            "avg_pace_seconds_per_km, name, waypoints, weather_json, route_summary, route_thumbnail, "
+            "note, feel, body_tags, weather_feel, music, mid_run_notes) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::text[], %s::text[], %s, %s) RETURNING *",
             (user["id"], started_at, now, distance, duration, avg_pace, route_summary, json.dumps(waypoints),
-             json.dumps(weather_data) if weather_data else None, route_summary, json.dumps(route_thumbnail)),
+             json.dumps(weather_data) if weather_data else None, route_summary, json.dumps(route_thumbnail),
+             feel_fields.get("note"), feel_fields.get("feel"), feel_fields.get("body_tags", []),
+             feel_fields.get("weather_feel", []), json.dumps(music) if music else None,
+             json.dumps(feel_fields.get("mid_run_notes", []))),
         )
         run = _row(cur, cur.fetchone())
+        if gear_items:
+            _replace_run_gear(cur, run["id"], gear_items)
         conn.commit()
         cur.close()
         badges_earned = compute_and_upsert_badges(conn, user["id"], run["id"], distance)
@@ -397,7 +612,13 @@ def create_run(req: func.HttpRequest) -> func.HttpResponse:
         run["weather_json"] = weather_data
         run["route_summary"] = route_summary
         run["route_thumbnail"] = route_thumbnail
-        run["note"] = None
+        run["note"] = feel_fields.get("note")
+        run["feel"] = feel_fields.get("feel")
+        run["body_tags"] = feel_fields.get("body_tags", [])
+        run["weather_feel"] = feel_fields.get("weather_feel", [])
+        run["music"] = music
+        run["mid_run_notes"] = feel_fields.get("mid_run_notes", [])
+        run["gear"] = [{**owned[g["gear_id"]], **g} for g in gear_items]
         conn.close()
         return json_response(run, 201)
     except Exception as e:
@@ -416,14 +637,13 @@ def get_run(req: func.HttpRequest) -> func.HttpResponse:
         conn = get_conn()
         user = get_or_create_user(conn, google_id, email, display_name)
         cur = conn.cursor()
-        cur.execute("SELECT * FROM runs WHERE id = %s AND user_id = %s", (run_id, user["id"]))
+        cur.execute(f"SELECT *, {RUN_GEAR_JSON} FROM runs WHERE id = %s AND user_id = %s", (run_id, user["id"]))
         run = _row(cur, cur.fetchone())
         if not run:
             cur.close()
             conn.close()
             return err("Not found", 404)
-        run["weather_json"] = _maybe_json(run["weather_json"])
-        run["route_thumbnail"] = _maybe_json(run["route_thumbnail"])
+        _normalize_run(run)
         cur.execute("SELECT badge_type FROM badges WHERE run_id = %s", (run_id,))
         run["badges_earned"] = [r[0] for r in cur.fetchall()]
         cur.close()
@@ -445,16 +665,44 @@ def update_run(req: func.HttpRequest) -> func.HttpResponse:
         body = req.get_json()
     except Exception:
         return err("Invalid JSON")
-    if "note" not in body:
-        return err("note field required")
-    note = body["note"]
+    if not isinstance(body, dict):
+        return err("Invalid JSON")
+    try:
+        fields = parse_run_feel_fields(body)
+    except ValidationError as e:
+        return err(str(e))
+    if not fields:
+        return err("Nothing to update: send note, feel, body_tags, weather_feel, music, mid_run_notes or gear")
+    gear_items = fields.pop("gear", None)
+    sets, params = [], []
+    for col, value in fields.items():
+        if col in ("body_tags", "weather_feel"):
+            sets.append(f"{col} = %s::text[]")
+        else:
+            sets.append(f"{col} = %s")
+            if col in ("music", "mid_run_notes"):
+                value = None if value is None else json.dumps(value)
+        params.append(value)
     try:
         conn = get_conn()
         user = get_or_create_user(conn, google_id, email, display_name)
         cur = conn.cursor()
+        if gear_items is not None:
+            cur.execute("SELECT id FROM runs WHERE id = %s AND user_id = %s", (run_id, user["id"]))
+            if not cur.fetchone():
+                cur.close()
+                conn.close()
+                return err("Not found", 404)
+            owned = _owned_gear(cur, user["id"], [g["gear_id"] for g in gear_items])
+            if len(owned) != len(gear_items):
+                cur.close()
+                conn.close()
+                return err("gear includes an item that isn't yours")
+            _replace_run_gear(cur, run_id, gear_items)
         cur.execute(
-            "UPDATE runs SET note = %s WHERE id = %s AND user_id = %s RETURNING *",
-            (note, run_id, user["id"]),
+            f"UPDATE runs SET {', '.join(sets) or 'id = id'} WHERE id = %s AND user_id = %s "
+            f"RETURNING *, {RUN_GEAR_JSON}",
+            (*params, run_id, user["id"]),
         )
         run = _row(cur, cur.fetchone())
         if not run:
@@ -462,8 +710,7 @@ def update_run(req: func.HttpRequest) -> func.HttpResponse:
             conn.close()
             return err("Not found", 404)
         conn.commit()
-        run["weather_json"] = _maybe_json(run["weather_json"])
-        run["route_thumbnail"] = _maybe_json(run["route_thumbnail"])
+        _normalize_run(run)
         cur.execute("SELECT badge_type FROM badges WHERE run_id = %s", (run_id,))
         run["badges_earned"] = [r[0] for r in cur.fetchall()]
         cur.close()
@@ -496,6 +743,106 @@ def delete_run(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse(status_code=204)
     except Exception as e:
         logging.exception("delete_run error")
+        return err(str(e), 500)
+
+
+@app.route(route="gear", methods=["GET"])
+def list_gear(req: func.HttpRequest) -> func.HttpResponse:
+    identity = require_auth(req)
+    if not identity:
+        return err("Unauthorized", 401)
+    google_id, email, display_name = identity
+    try:
+        conn = get_conn()
+        user = get_or_create_user(conn, google_id, email, display_name)
+        cur = conn.cursor()
+        cur.execute(GEAR_WITH_STATS.format(extra=""), (user["id"],))
+        rows = _rows(cur)
+        cur.close()
+        conn.close()
+        return json_response(rows)
+    except Exception as e:
+        logging.exception("list_gear error")
+        return err(str(e), 500)
+
+
+@app.route(route="gear", methods=["POST"])
+def create_gear(req: func.HttpRequest) -> func.HttpResponse:
+    identity = require_auth(req)
+    if not identity:
+        return err("Unauthorized", 401)
+    google_id, email, display_name = identity
+    try:
+        body = req.get_json()
+    except Exception:
+        return err("Invalid JSON")
+    if not isinstance(body, dict):
+        return err("Invalid JSON")
+    try:
+        fields = parse_gear_fields(body, partial=False)
+    except ValidationError as e:
+        return err(str(e))
+    try:
+        conn = get_conn()
+        user = get_or_create_user(conn, google_id, email, display_name)
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO gear (user_id, name, kind, color) VALUES (%s, %s, %s, %s) RETURNING id",
+            (user["id"], fields["name"], fields["kind"], fields["color"]),
+        )
+        gear_id = cur.fetchone()[0]
+        conn.commit()
+        cur.execute(GEAR_WITH_STATS.format(extra="AND g.id = %s"), (user["id"], gear_id))
+        gear = _row(cur, cur.fetchone())
+        cur.close()
+        conn.close()
+        return json_response(gear, 201)
+    except Exception as e:
+        logging.exception("create_gear error")
+        return err(str(e), 500)
+
+
+@app.route(route="gear/{gear_id}", methods=["PATCH"])
+def update_gear(req: func.HttpRequest) -> func.HttpResponse:
+    gear_id = req.route_params.get("gear_id")
+    identity = require_auth(req)
+    if not identity:
+        return err("Unauthorized", 401)
+    google_id, email, display_name = identity
+    try:
+        body = req.get_json()
+    except Exception:
+        return err("Invalid JSON")
+    if not isinstance(body, dict):
+        return err("Invalid JSON")
+    try:
+        fields = parse_gear_fields(body, partial=True)
+    except ValidationError as e:
+        return err(str(e))
+    if not fields:
+        return err("Nothing to update: send name, kind, color or retired")
+    try:
+        conn = get_conn()
+        user = get_or_create_user(conn, google_id, email, display_name)
+        cur = conn.cursor()
+        cur.execute(
+            f"UPDATE gear SET {', '.join(f'{col} = %s' for col in fields)} "
+            "WHERE id::text = %s AND user_id = %s RETURNING id",
+            (*fields.values(), gear_id, user["id"]),
+        )
+        row = cur.fetchone()
+        if not row:
+            cur.close()
+            conn.close()
+            return err("Not found", 404)
+        conn.commit()
+        cur.execute(GEAR_WITH_STATS.format(extra="AND g.id = %s"), (user["id"], row[0]))
+        gear = _row(cur, cur.fetchone())
+        cur.close()
+        conn.close()
+        return json_response(gear)
+    except Exception as e:
+        logging.exception("update_gear error")
         return err(str(e), 500)
 
 
