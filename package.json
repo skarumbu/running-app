@@ -8,6 +8,7 @@
     "@capacitor/core": "^7.6.8",
     "@capacitor/ios": "^7.6.8",
     "@capacitor/local-notifications": "^7.0.7",
+    "@capacitor/preferences": "^7.0.4",
     "@microsoft/applicationinsights-web": "^3.4.3",
     "@southdevs/capacitor-google-auth": "^7.0.0",
     "@testing-library/dom": "^10.4.1",
