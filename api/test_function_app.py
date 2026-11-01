@@ -3,7 +3,7 @@ import os
 import sys
 import unittest
 from unittest.mock import MagicMock, patch
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -747,7 +747,8 @@ class TestCreateRunFeel(unittest.TestCase):
         resp = function_app.create_run(scripted_request(self.body()))
         self.assertEqual(resp.status_code, 201)
         insert = conn.ran("INSERT INTO runs (")[0]
-        self.assertEqual(insert[11:], (None, None, [], [], None, "[]"))
+        self.assertEqual(insert[11:17], (None, None, [], [], None, "[]"))
+        self.assertIsNone(insert[17])  # no client id: the database picks one
         self.assertEqual(conn.ran("FROM gear WHERE user_id"), [])
         self.assertEqual(conn.ran("run_gear"), [])
         self.assertEqual(json.loads(resp.get_body())["gear"], [])
@@ -755,6 +756,96 @@ class TestCreateRunFeel(unittest.TestCase):
     def test_non_object_body_is_400(self, mock_get_conn, *_):
         resp = function_app.create_run(scripted_request([1, 2]))
         self.assertEqual(resp.status_code, 400)
+
+
+CLIENT_ID = "1b4e28ba-2fa1-4d3b-a3f5-ef19b5a7633b"
+
+
+@patch("function_app.require_auth", return_value=AUTH)
+@patch("function_app.get_or_create_user", return_value={"id": "user-1"})
+@patch("function_app.compute_and_upsert_badges", return_value=[])
+@patch("function_app.build_route_summary", return_value="Loop around Green Lake")
+@patch("function_app.fetch_weather", return_value=None)
+@patch("function_app.get_conn")
+class TestCreateRunClientId(unittest.TestCase):
+    """A queued run can be sent more than once; the client's id makes that safe."""
+
+    waypoints = [{"lat": 47.68, "lng": -122.34, "ts": 0}, {"lat": 47.681, "lng": -122.34, "ts": 1}]
+
+    def body(self, **extra):
+        return {"distance_meters": 5000, "duration_seconds": 1500, "waypoints": self.waypoints,
+                "id": CLIENT_ID, **extra}
+
+    def test_inserts_with_the_client_id(self, mock_get_conn, *_):
+        conn = ScriptedConn([("INSERT INTO runs (", (RUN_COLUMNS, [run_row(id=CLIENT_ID)]))])
+        mock_get_conn.return_value = conn
+        resp = function_app.create_run(scripted_request(self.body()))
+        self.assertEqual(resp.status_code, 201)
+        query, params = [q for q in conn.queries if "INSERT INTO runs (" in q[0]][0]
+        self.assertIn("ON CONFLICT (id) DO NOTHING", query)
+        self.assertEqual(params[17], CLIENT_ID)
+        self.assertEqual(json.loads(resp.get_body())["id"], CLIENT_ID)
+
+    def test_uppercase_id_is_normalised(self, mock_get_conn, *_):
+        conn = ScriptedConn([("INSERT INTO runs (", (RUN_COLUMNS, [run_row(id=CLIENT_ID)]))])
+        mock_get_conn.return_value = conn
+        function_app.create_run(scripted_request(self.body(id=CLIENT_ID.upper())))
+        self.assertEqual(conn.ran("INSERT INTO runs (")[0][17], CLIENT_ID)
+
+    def test_replay_returns_the_stored_run_without_inserting_gear(self, mock_get_conn, mock_weather, mock_summary,
+                                                                   mock_badges, *_):
+        stored = run_row(id=CLIENT_ID, feel=4) + (json.dumps([{"gear_id": "g-shoe", "comfort": 3}]),)
+        conn = ScriptedConn([
+            ("FROM gear WHERE user_id", (OWNED_GEAR_COLUMNS, [("g-shoe", "Pegasus", "shoe", "a1", False)])),
+            ("INSERT INTO runs (", (RUN_COLUMNS, [])),  # ON CONFLICT DO NOTHING: no row back
+            ("FROM runs WHERE id", (RUN_COLUMNS + ["gear"], [stored])),
+            ("SELECT badge_type FROM badges", (["badge_type"], [("first_run",), ("5k",)])),
+        ])
+        mock_get_conn.return_value = conn
+        resp = function_app.create_run(scripted_request(self.body(
+            feel=4, gear=[{"gear_id": "g-shoe", "comfort": 3}])))
+        self.assertEqual(resp.status_code, 200)
+        body = json.loads(resp.get_body())
+        self.assertEqual(body["id"], CLIENT_ID)
+        self.assertEqual(body["gear"], [{"gear_id": "g-shoe", "comfort": 3}])
+        self.assertEqual(body["badges_earned"], ["first_run", "5k"])
+        self.assertEqual(conn.ran("INSERT INTO run_gear"), [])
+        self.assertEqual(conn.ran("DELETE FROM run_gear"), [])
+        # Re-running the badge upsert is safe (ON CONFLICT DO NOTHING) and
+        # covers a first attempt that died between the run commit and badges.
+        mock_badges.assert_called_once_with(conn, "user-1", CLIENT_ID, 5000)
+
+    def test_id_owned_by_another_user_is_rejected(self, mock_get_conn, *_):
+        theirs = run_row(id=CLIENT_ID, user_id="user-2") + ("[]",)
+        conn = ScriptedConn([
+            ("INSERT INTO runs (", (RUN_COLUMNS, [])),
+            ("FROM runs WHERE id", (RUN_COLUMNS + ["gear"], [theirs])),
+        ])
+        mock_get_conn.return_value = conn
+        resp = function_app.create_run(scripted_request(self.body()))
+        self.assertEqual(resp.status_code, 409)
+        self.assertNotIn("user-2", resp.get_body().decode())
+
+    def test_invalid_uuid_is_400_before_the_database(self, mock_get_conn, *_):
+        resp = function_app.create_run(scripted_request(self.body(id="not-a-uuid")))
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("id must be a UUID", json.loads(resp.get_body())["error"])
+        mock_get_conn.assert_not_called()
+
+    def test_ended_at_from_the_phone_sets_started_at(self, mock_get_conn, *_):
+        conn = ScriptedConn([("INSERT INTO runs (", (RUN_COLUMNS, [run_row(id=CLIENT_ID)]))])
+        mock_get_conn.return_value = conn
+        ended = datetime.now(timezone.utc).replace(microsecond=0) - timedelta(hours=3)
+        function_app.create_run(scripted_request(self.body(ended_at=ended.isoformat().replace("+00:00", "Z"))))
+        params = conn.ran("INSERT INTO runs (")[0]
+        self.assertEqual(params[2], ended)
+        self.assertEqual(params[1], ended - timedelta(seconds=1500))
+
+    def test_ended_at_out_of_range_is_400(self, mock_get_conn, *_):
+        for bad in ["yesterday", "2020-01-01T00:00:00Z", "2999-01-01T00:00:00Z", "2026-01-01T00:00:00"]:
+            resp = function_app.create_run(scripted_request(self.body(ended_at=bad)))
+            self.assertEqual(resp.status_code, 400, bad)
+        mock_get_conn.assert_not_called()
 
 
 @patch("function_app.require_auth", return_value=AUTH)
