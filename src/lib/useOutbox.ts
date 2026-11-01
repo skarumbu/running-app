@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../AuthContext';
-import { PendingRun, listPending, postRunWith, subscribe, syncOutbox } from './outbox';
+import { PendingRun, claimPending, listPending, postRunWith, subscribe, syncOutbox } from './outbox';
 
-/** The queued runs, kept current, and a way to push them now. */
+/** The queued runs, kept current, and ways to push the signed-in account's now. */
 export function useOutbox() {
-  const { apiFetch } = useAuth();
+  const { apiFetch, user } = useAuth();
+  const accountId = user?.googleId;
   const [pending, setPending] = useState<PendingRun[]>([]);
   const [syncing, setSyncing] = useState(false);
 
@@ -18,13 +19,20 @@ export function useOutbox() {
   const syncNow = useCallback(async () => {
     setSyncing(true);
     try {
-      return await syncOutbox(postRunWith(apiFetch));
+      return await syncOutbox(postRunWith(apiFetch), accountId);
     } finally {
       setSyncing(false);
     }
-  }, [apiFetch]);
+  }, [apiFetch, accountId]);
 
-  return { pending, syncing, syncNow };
+  /** Makes an ownerless run the signed-in account's, then uploads it. */
+  const claim = useCallback(async (clientId: string) => {
+    if (!user) return;
+    await claimPending(clientId, { id: user.googleId, email: user.email });
+    await syncNow();
+  }, [user, syncNow]);
+
+  return { pending, syncing, syncNow, claim, accountId };
 }
 
 /**
@@ -36,13 +44,14 @@ export function useOutbox() {
 export function useOutboxAutoSync() {
   const { user, needsSignIn, apiFetch } = useAuth();
   const token = user?.token;
+  const accountId = user?.googleId;
 
   useEffect(() => {
     if (!token || needsSignIn) return;
-    const sync = () => { syncOutbox(postRunWith(apiFetch)); };
+    const sync = () => { syncOutbox(postRunWith(apiFetch), accountId); };
     sync();
     const onVisibility = () => { if (document.visibilityState === 'visible') sync(); };
     document.addEventListener('visibilitychange', onVisibility);
     return () => document.removeEventListener('visibilitychange', onVisibility);
-  }, [token, needsSignIn, apiFetch]);
+  }, [token, needsSignIn, apiFetch, accountId]);
 }

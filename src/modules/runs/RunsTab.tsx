@@ -5,7 +5,7 @@ import WeatherIcon from '../../components/WeatherIcon';
 import { FEELS, MUSIC_KINDS, WEATHER_FEELS, accentVar, feelOf, labelOf } from '../../lib/feel';
 import { formatRunDate } from '../../lib/format';
 import type { RunSummary } from '../../lib/runTypes';
-import { PendingRun, removePending } from '../../lib/outbox';
+import { Ownership, PendingRun, ownershipOf, removePending } from '../../lib/outbox';
 import { useOutbox } from '../../lib/useOutbox';
 import '../../components/components.css';
 import './runs.css';
@@ -58,15 +58,26 @@ export function RunCard({ run, onOpen }: { run: RunSummary; onOpen: () => void }
 }
 
 /** A run saved on this phone that hasn't reached the server yet. */
-export function PendingRunCard({ pending, needsSignIn }: { pending: PendingRun; needsSignIn: boolean }) {
+export function PendingRunCard({ pending, ownership, needsSignIn, accountEmail, onClaim }: {
+  pending: PendingRun;
+  ownership: Ownership;
+  needsSignIn: boolean;
+  /** The signed-in account, offered as the home for a run with no recorded owner. */
+  accountEmail: string | null;
+  onClaim: () => void;
+}) {
   const { payload } = pending;
   const feel = feelOf(payload.feel);
   const startedAt = new Date(new Date(payload.ended_at).getTime() - payload.duration_seconds * 1000).toISOString();
-  const status = needsSignIn
-    ? "Saved on this phone, will sync when you're signed in"
-    : pending.lastError
-      ? `Saved on this phone · last try: ${pending.lastError}`
-      : 'Saved on this phone · waiting to sync';
+  const status = ownership === 'other'
+    ? `Saved by ${pending.owner!.email}, will sync when they sign in`
+    : ownership === 'unknown'
+      ? 'Saved on this phone before runs were tied to an account'
+      : needsSignIn
+        ? "Saved on this phone, will sync when you're signed in"
+        : pending.lastError
+          ? `Saved on this phone · last try: ${pending.lastError}`
+          : 'Saved on this phone · waiting to sync';
   return (
     <div className="run-card pending" data-testid="pending-run">
       <span
@@ -76,12 +87,21 @@ export function PendingRunCard({ pending, needsSignIn }: { pending: PendingRun; 
       />
       <span className="run-card-body">
         <span className="run-card-top">
-          <span className="run-card-title">Waiting to sync</span>
+          <span className="run-card-title">{ownership === 'mine' ? 'Waiting to sync' : 'On this phone'}</span>
           {feel && <span className="eyebrow run-card-feel">{feel.word}</span>}
         </span>
         <span className="muted-line">{formatRunDate(startedAt)}</span>
         <span className="muted-line pending-status">{status}</span>
-        {pending.attempts > 0 && (
+        {ownership === 'unknown' && accountEmail && (
+          <button
+            type="button"
+            className="link-btn pending-claim"
+            onClick={() => { if (window.confirm(`Upload this run to ${accountEmail}?`)) onClaim(); }}
+          >
+            Upload to {accountEmail}
+          </button>
+        )}
+        {(pending.attempts > 0 || ownership !== 'mine') && (
           <button
             type="button"
             className="link-btn pending-discard"
@@ -102,8 +122,9 @@ export default function RunsTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
-  const { apiFetch, needsSignIn } = useAuth();
-  const { pending, syncing, syncNow } = useOutbox();
+  const { apiFetch, needsSignIn, user } = useAuth();
+  const { pending, syncing, syncNow, claim, accountId } = useOutbox();
+  const hasOwnRuns = pending.some(p => ownershipOf(p, accountId) === 'mine');
   // Refetch when a queued run leaves the outbox, so it shows up as a saved run.
   const pendingCount = pending.length;
 
@@ -119,11 +140,22 @@ export default function RunsTab() {
     <section className="stack tight" aria-label="Waiting to sync">
       <div className="pending-head">
         <span className="eyebrow">On this phone · {pending.length}</span>
-        <button type="button" className="pill-btn" onClick={() => syncNow()} disabled={syncing}>
-          {syncing ? 'Syncing…' : 'Sync now'}
-        </button>
+        {hasOwnRuns && (
+          <button type="button" className="pill-btn" onClick={() => syncNow()} disabled={syncing}>
+            {syncing ? 'Syncing…' : 'Sync now'}
+          </button>
+        )}
       </div>
-      {pending.map(p => <PendingRunCard key={p.clientId} pending={p} needsSignIn={needsSignIn} />)}
+      {pending.map(p => (
+        <PendingRunCard
+          key={p.clientId}
+          pending={p}
+          ownership={ownershipOf(p, accountId)}
+          needsSignIn={needsSignIn}
+          accountEmail={user?.email ?? null}
+          onClaim={() => claim(p.clientId)}
+        />
+      ))}
     </section>
   );
 

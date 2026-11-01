@@ -160,4 +160,5 @@
 .run-card.pending { cursor: default; border: 2px dashed var(--line); box-shadow: none; }
 .pending-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .pending-status { font-size: 12px; }
-.pending-discard { align-self: flex-start; padding: 0; }
+.pending-discard, .pending-claim { align-self: flex-start; padding: 0; }
+.pending-claim { color: var(--ink); }

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../AuthContext';
 import { useGPS } from '../../hooks/useGPS';
 import { useRunTimer } from '../../hooks/useRunTimer';
 import { showRunTrackingNotification, clearRunTrackingNotification } from '../../lib/runNotification';
@@ -7,7 +8,7 @@ import { useGearList } from '../../lib/useGearList';
 import { EMPTY_MUSIC, MusicDraft, emptyRunFeelValues } from '../../components/RunFeelForm';
 import type { MidRunNoteKind } from '../../lib/feel';
 import type { MidRunNote } from '../../lib/runTypes';
-import { newClientId } from '../../lib/outbox';
+import { Owner, newClientId } from '../../lib/outbox';
 import {
   CHECKPOINT_INTERVAL_MS, RunCheckpoint, clearCheckpoint, loadCheckpoint, saveCheckpoint,
 } from '../../lib/runCheckpoint';
@@ -24,6 +25,8 @@ type RunState = 'idle' | 'running' | 'paused' | 'saving';
 export default function RunTab() {
   const [phase, setPhase] = useState<RunState>('idle');
   const [clientId, setClientId] = useState('');
+  // The account that started this run; it owns the saved run.
+  const [owner, setOwner] = useState<Owner | null>(null);
   const [endedAt, setEndedAt] = useState('');
   const [pickedGear, setPickedGear] = useState<string[]>([]);
   const [music, setMusic] = useState<MusicDraft>(EMPTY_MUSIC);
@@ -35,8 +38,8 @@ export default function RunTab() {
 
   // Checkpoint writes read the newest state through this ref, because the
   // GPS callback that triggers them was created on an earlier render.
-  const latest = useRef({ phase, clientId, endedAt, pickedGear, music, midRunNotes });
-  latest.current = { phase, clientId, endedAt, pickedGear, music, midRunNotes };
+  const latest = useRef({ phase, clientId, owner, endedAt, pickedGear, music, midRunNotes });
+  latest.current = { phase, clientId, owner, endedAt, pickedGear, music, midRunNotes };
   const lastCheckpointAt = useRef(0);
 
   const timerRef = useRef<ReturnType<typeof useRunTimer> | null>(null);
@@ -49,6 +52,7 @@ export default function RunTab() {
     const route = gpsRef.current.snapshot();
     saveCheckpoint({
       clientId: l.clientId,
+      owner: l.owner,
       phase: l.phase,
       timer: timerRef.current.snapshot(),
       waypoints: route.waypoints,
@@ -70,6 +74,7 @@ export default function RunTab() {
   timerRef.current = timer;
   gpsRef.current = gps;
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { gear } = useGearList();
   const weather = useCurrentWeather();
 
@@ -98,6 +103,7 @@ export default function RunTab() {
 
   const handleStart = () => {
     setClientId(newClientId());
+    setOwner(user ? { id: user.googleId, email: user.email } : null);
     setMidRunNotes([]);
     setPhase('running');
     gps.start();
@@ -130,6 +136,8 @@ export default function RunTab() {
   const restoreRun = (cp: RunCheckpoint, mode: 'resume' | 'finish') => {
     setRestorable(null);
     setClientId(cp.clientId);
+    // A checkpoint from before owners were recorded stays ownerless; Runs offers to claim it.
+    setOwner(cp.owner ?? null);
     setPickedGear(cp.pickedGear);
     setMusic(cp.music);
     setMidRunNotes(cp.midRunNotes);
@@ -172,6 +180,7 @@ export default function RunTab() {
     return (
       <HowWasIt
         clientId={clientId}
+        owner={owner}
         endedAt={endedAt}
         elapsedSeconds={timer.elapsedSeconds}
         distanceMeters={gps.distanceMeters}

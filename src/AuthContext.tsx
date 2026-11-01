@@ -6,6 +6,12 @@ import { trackException, trackEvent } from './lib/telemetry';
 
 export interface User {
   id: string;
+  /**
+   * The Google account's `sub`: the stable id of who is signed in. Read from
+   * the token itself, so it's the same online or offline (unlike `id`, which
+   * falls back to the sub when /api/users/me can't be reached).
+   */
+  googleId: string;
   email: string;
   displayName: string;
   token: string;
@@ -106,6 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = res.ok ? await res.json() : null;
       setUser({
         id: data?.id ?? (payload['sub'] as string),
+        googleId: payload['sub'] as string,
         email: data?.email ?? (payload['email'] as string),
         displayName: data?.displayName ?? (payload['name'] as string) ?? (payload['email'] as string),
         token,
@@ -113,6 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       setUser({
         id: payload['sub'] as string,
+        googleId: payload['sub'] as string,
         email: payload['email'] as string,
         displayName: (payload['name'] as string) ?? (payload['email'] as string),
         token,

@@ -55,6 +55,7 @@ function renderApp(extra?: React.ReactNode) {
         <Who />
         <HowWasIt
           clientId={CLIENT_ID}
+          owner={{ id: 'g1', email: 'r@x.com' }}
           endedAt="2026-11-01T08:30:00.000Z"
           elapsedSeconds={4200}
           distanceMeters={12000}
@@ -116,7 +117,27 @@ test('refresh fails: the run is queued, the user is not signed out, and Runs sho
   expect(await screen.findByText("Saved on this phone, will sync when you're signed in.")).toBeInTheDocument();
   expect(screen.getByTestId('who')).toHaveTextContent('r@x.com (needs sign-in)');
   expect(onSaved).not.toHaveBeenCalled();
-  expect((await listPending()).map(p => p.clientId)).toEqual([CLIENT_ID]);
+  expect((await listPending()).map(p => [p.clientId, p.owner])).toEqual([[CLIENT_ID, { id: 'g1', email: 'r@x.com' }]]);
   const card = await screen.findByTestId('pending-run');
   expect(card).toHaveTextContent("will sync when you're signed in");
+});
+
+test('a run queued by another account is not uploaded under the signed-in one', async () => {
+  installGis(false);
+  fetchMock.mockImplementation((url: string, init?: RequestInit) =>
+    url.endsWith('/api/users/me') ? respond(200, { id: 'u1', email: 'r@x.com', displayName: 'Runner' })
+      : init?.method === 'POST' ? respond(201, {}) : respond(200, []));
+  localStorage.setItem('run.outbox.v1', JSON.stringify([{
+    clientId: 'b6a1c7d2-0e3f-4a5b-9c8d-7e6f5a4b3c2d',
+    payload: { id: 'b6a1c7d2-0e3f-4a5b-9c8d-7e6f5a4b3c2d', ended_at: '2026-10-31T08:00:00.000Z', duration_seconds: 1200, distance_meters: 3000,
+      waypoints: [], mid_run_notes: [], feel: 3, body_tags: [], weather_feel: [], music: null, note: null, gear: [] },
+    createdAt: '2026-10-31T08:01:00.000Z', attempts: 0, lastError: null, owner: { id: 'g2', email: 'other@x.com' },
+  }]));
+  renderApp(<RunsTab />);
+  await waitFor(() => expect(screen.getByTestId('who')).toHaveTextContent('r@x.com'));
+
+  const card = await screen.findByTestId('pending-run');
+  expect(card).toHaveTextContent('Saved by other@x.com, will sync when they sign in');
+  expect(screen.queryByRole('button', { name: 'Sync now' })).not.toBeInTheDocument();
+  expect(fetchMock.mock.calls.filter(c => c[1]?.method === 'POST')).toEqual([]);
 });

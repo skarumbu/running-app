@@ -1,12 +1,14 @@
 import React from 'react';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import RunsTab from './RunsTab';
 
 const mockApiFetch = jest.fn();
 
+const ME = { id: 'g-me', email: 'me@x.com' };
+
 jest.mock('../../AuthContext', () => ({
-  useAuth: () => ({ apiFetch: mockApiFetch }),
+  useAuth: () => ({ apiFetch: mockApiFetch, needsSignIn: false, user: { googleId: 'g-me', email: 'me@x.com', token: 't' } }),
 }));
 
 function jsonResponse(data: unknown) {
@@ -94,7 +96,7 @@ describe('runs waiting on this phone', () => {
 
   test('show as a pending card, even when the list can\'t load, and Sync now uploads them', async () => {
     const { enqueue, listPending } = require('../../lib/outbox');
-    await enqueue(queued);
+    await enqueue(queued, ME);
     let online = false;
     mockApiFetch.mockImplementation((url: string, init?: RequestInit) => {
       if (!online) return Promise.reject(new TypeError('Failed to fetch'));
@@ -119,5 +121,53 @@ describe('runs waiting on this phone', () => {
     const post = mockApiFetch.mock.calls.find(c => c[1]?.method === 'POST');
     expect(JSON.parse(post[1].body).id).toBe(queued.id);
     expect(await listPending()).toEqual([]);
+  });
+
+  test('a run saved by another account says whose it is, offers no Sync now, and is discarded only on confirm', async () => {
+    const { enqueue, listPending } = require('../../lib/outbox');
+    await enqueue(queued, { id: 'g-them', email: 'them@x.com' });
+    mockApiFetch.mockImplementation(() => jsonResponse([]));
+    const confirm = jest.spyOn(window, 'confirm');
+
+    render(<MemoryRouter><RunsTab /></MemoryRouter>);
+
+    const card = await screen.findByTestId('pending-run');
+    expect(card).toHaveTextContent('Saved by them@x.com, will sync when they sign in');
+    expect(card).not.toHaveTextContent('Waiting to sync');
+    expect(screen.queryByRole('button', { name: 'Sync now' })).not.toBeInTheDocument();
+
+    confirm.mockReturnValueOnce(false);
+    fireEvent.click(within(card).getByRole('button', { name: 'Discard' }));
+    expect(await listPending()).toHaveLength(1);
+
+    confirm.mockReturnValueOnce(true);
+    fireEvent.click(within(card).getByRole('button', { name: 'Discard' }));
+    await waitFor(() => expect(screen.queryByTestId('pending-run')).not.toBeInTheDocument());
+    expect(mockApiFetch.mock.calls.filter(c => c[1]?.method === 'POST')).toEqual([]);
+    confirm.mockRestore();
+  });
+
+  test('a run queued before owners existed waits, and "Upload to <me>" claims and uploads it', async () => {
+    const { listPending } = require('../../lib/outbox');
+    localStorage.setItem('run.outbox.v1', JSON.stringify([
+      { clientId: queued.id, payload: queued, createdAt: '2026-11-01T08:31:00.000Z', attempts: 0, lastError: null },
+    ]));
+    mockApiFetch.mockImplementation((url: string, init?: RequestInit) => (init?.method === 'POST'
+      ? Promise.resolve({ ok: true, status: 201, json: () => Promise.resolve({ id: queued.id }) } as Response)
+      : jsonResponse([])));
+    const confirm = jest.spyOn(window, 'confirm').mockReturnValue(true);
+
+    render(<MemoryRouter><RunsTab /></MemoryRouter>);
+
+    const card = await screen.findByTestId('pending-run');
+    expect(screen.queryByRole('button', { name: 'Sync now' })).not.toBeInTheDocument();
+    fireEvent.click(within(card).getByRole('button', { name: 'Upload to me@x.com' }));
+
+    expect(confirm).toHaveBeenCalledWith('Upload this run to me@x.com?');
+    await waitFor(() => expect(screen.queryByTestId('pending-run')).not.toBeInTheDocument());
+    const post = mockApiFetch.mock.calls.find(c => c[1]?.method === 'POST');
+    expect(JSON.parse(post[1].body).id).toBe(queued.id);
+    expect(await listPending()).toEqual([]);
+    confirm.mockRestore();
   });
 });

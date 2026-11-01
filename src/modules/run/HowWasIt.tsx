@@ -3,7 +3,7 @@ import { useAuth } from '../../AuthContext';
 import RunFeelForm, { GearOption, RunFeelValues, toRunFeelPayload } from '../../components/RunFeelForm';
 import WeatherCard from '../../components/WeatherCard';
 import { describeRequestError } from '../../lib/apiErrors';
-import { RunPayload, enqueue, postRunWith, sendPending } from '../../lib/outbox';
+import { Owner, RunPayload, enqueue, postRunWith, sendPending } from '../../lib/outbox';
 import { MID_RUN_NOTES, labelOf } from '../../lib/feel';
 import type { Waypoint } from '../../hooks/useGPS';
 import type { MidRunNote, WeatherSummary } from '../../lib/runTypes';
@@ -11,6 +11,8 @@ import type { MidRunNote, WeatherSummary } from '../../lib/runTypes';
 interface Props {
   /** The client's id for this run; resending it never makes a second run. */
   clientId: string;
+  /** The account that started the run (null if unknown); only it uploads the run. */
+  owner: Owner | null;
   /** When Finish was tapped, ISO. */
   endedAt: string;
   elapsedSeconds: number;
@@ -31,13 +33,13 @@ interface Props {
 }
 
 export default function HowWasIt({
-  clientId, endedAt, elapsedSeconds, distanceMeters, waypoints, midRunNotes, initial, gearOptions, weather,
+  clientId, owner, endedAt, elapsedSeconds, distanceMeters, waypoints, midRunNotes, initial, gearOptions, weather,
   onStoredLocally, onSaved, onQueuedDone, onDiscard,
 }: Props) {
-  const { apiFetch, ensureFreshToken } = useAuth();
+  const { apiFetch, ensureFreshToken, user } = useAuth();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [queued, setQueued] = useState<{ needsSignIn: boolean } | null>(null);
+  const [queued, setQueued] = useState<{ needsSignIn: boolean; notMine?: boolean } | null>(null);
 
   // On the phone first, then the upload: a failed upload can't lose the run.
   async function save(values: RunFeelValues) {
@@ -53,7 +55,7 @@ export default function HowWasIt({
       ...toRunFeelPayload(values),
     };
     try {
-      await enqueue(payload);
+      await enqueue(payload, owner);
     } catch (e) {
       setError(`Couldn't save on this phone: ${describeRequestError(e)}`);
       setSaving(false);
@@ -64,11 +66,11 @@ export default function HowWasIt({
       setQueued({ needsSignIn: true });
       return;
     }
-    const result = await sendPending(clientId, postRunWith(apiFetch));
+    const result = await sendPending(clientId, postRunWith(apiFetch), user?.googleId);
     if (result.ok) {
       onSaved(result.runId);
     } else if (result.retryable) {
-      setQueued({ needsSignIn: result.needsSignIn });
+      setQueued({ needsSignIn: result.needsSignIn, notMine: result.notMine });
     } else {
       // The server rejected it (e.g. gear that isn't yours): fixable here.
       // It stays in the outbox, so leaving now still keeps it.
@@ -88,9 +90,13 @@ export default function HowWasIt({
         </div>
         <section className="card stack tight" role="status">
           <p className="queued-line">
-            {queued.needsSignIn
-              ? "Saved on this phone, will sync when you're signed in."
-              : 'Saved on this phone, will sync when the connection is back.'}
+            {queued.notMine
+              ? owner
+                ? `Saved on this phone, will sync when ${owner.email} signs in.`
+                : 'Saved on this phone. Upload it from Runs.'
+              : queued.needsSignIn
+                ? "Saved on this phone, will sync when you're signed in."
+                : 'Saved on this phone, will sync when the connection is back.'}
           </p>
           <p className="muted-line">It's waiting in Runs. Nothing is lost.</p>
         </section>

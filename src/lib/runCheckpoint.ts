@@ -1,5 +1,6 @@
 import { readJson, removeKey, writeJson } from './durableStore';
 import type { MusicDraft } from '../components/RunFeelForm';
+import type { Owner } from './outbox';
 import type { Waypoint } from '../hooks/useGPS';
 import type { MidRunNote } from './runTypes';
 import type { TimerSnapshot } from '../hooks/useRunTimer';
@@ -16,6 +17,8 @@ export type CheckpointPhase = 'running' | 'paused' | 'saving';
 
 export interface RunCheckpoint {
   clientId: string;
+  /** Who started the run; the saved run is theirs even if someone else is signed in when it's finished. */
+  owner?: Owner | null;
   phase: CheckpointPhase;
   timer: TimerSnapshot;
   waypoints: Waypoint[];

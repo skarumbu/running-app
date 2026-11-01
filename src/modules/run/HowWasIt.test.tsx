@@ -9,8 +9,14 @@ const mockApiFetch = jest.fn();
 const mockEnsureFreshToken = jest.fn();
 
 jest.mock('../../AuthContext', () => ({
-  useAuth: () => ({ apiFetch: mockApiFetch, ensureFreshToken: mockEnsureFreshToken }),
+  useAuth: () => ({
+    apiFetch: mockApiFetch,
+    ensureFreshToken: mockEnsureFreshToken,
+    user: { googleId: 'g-me', email: 'me@x.com' },
+  }),
 }));
+
+const ME = { id: 'g-me', email: 'me@x.com' };
 
 const CLIENT_ID = '0f8fad5b-d9cb-469f-a165-70867728950e';
 const ENDED_AT = '2026-11-01T08:30:00.000Z';
@@ -21,11 +27,12 @@ const waypoints = [{ lat: 47.68, lng: -122.34, ts: 0 }, { lat: 47.681, lng: -122
 
 const callbacks = { onStoredLocally: jest.fn(), onQueuedDone: jest.fn() };
 
-function renderForm(onSaved = jest.fn()) {
+function renderForm(onSaved = jest.fn(), owner: { id: string; email: string } | null = ME) {
   render(
     <MemoryRouter>
       <HowWasIt
         clientId={CLIENT_ID}
+        owner={owner}
         endedAt={ENDED_AT}
         onStoredLocally={callbacks.onStoredLocally}
         onQueuedDone={callbacks.onQueuedDone}
@@ -154,4 +161,14 @@ test('when the token cannot be refreshed it queues without trying the upload', a
   expect(await screen.findByRole('status')).toHaveTextContent("will sync when you're signed in");
   expect(mockApiFetch).not.toHaveBeenCalled();
   expect((await listPending())[0].attempts).toBe(0);
+});
+
+test('a resumed run started by another account is kept for them, not uploaded as me', async () => {
+  renderForm(jest.fn(), { id: 'g-them', email: 'them@x.com' });
+  fireEvent.click(screen.getByRole('button', { name: 'Save this run' }));
+
+  expect(await screen.findByText('Saved on this phone, will sync when them@x.com signs in.')).toBeInTheDocument();
+  expect(mockApiFetch).not.toHaveBeenCalled();
+  const [item] = await listPending();
+  expect(item).toMatchObject({ clientId: CLIENT_ID, owner: { id: 'g-them', email: 'them@x.com' }, attempts: 0, lastError: null });
 });

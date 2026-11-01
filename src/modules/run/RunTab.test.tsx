@@ -3,12 +3,17 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import RunTab from './RunTab';
 import { RunCheckpoint, loadCheckpoint, saveCheckpoint } from '../../lib/runCheckpoint';
+import { listPending } from '../../lib/outbox';
 
 const mockApiFetch = jest.fn();
 const mockNavigate = jest.fn();
 
 jest.mock('../../AuthContext', () => ({
-  useAuth: () => ({ apiFetch: mockApiFetch, ensureFreshToken: async () => true }),
+  useAuth: () => ({
+    apiFetch: mockApiFetch,
+    ensureFreshToken: async () => true,
+    user: { googleId: 'g-me', email: 'me@x.com', token: 't' },
+  }),
 }));
 jest.mock('../../lib/useGearList', () => ({ useGearList: () => ({ gear: [] }) }));
 jest.mock('./useCurrentWeather', () => ({ useCurrentWeather: () => null }));
@@ -28,6 +33,7 @@ const watchPosition = jest.fn(() => 7);
 function checkpoint(overrides: Partial<Omit<RunCheckpoint, 'savedAt'>>): Omit<RunCheckpoint, 'savedAt'> {
   return {
     clientId: CLIENT_ID,
+    owner: { id: 'g-me', email: 'me@x.com' },
     phase: 'paused',
     timer: { accumulatedMs: 10 * MIN, segmentStartedAt: null },
     waypoints: [{ lat: 47.68, lng: -122.34, ts: 1 }, { lat: 47.681, lng: -122.34, ts: 2 }],
@@ -118,6 +124,7 @@ test('the active run is checkpointed on start and on each note, and cleared on d
   await waitFor(async () => expect((await loadCheckpoint())?.phase).toBe('running'));
   const started = await loadCheckpoint();
   expect(started!.clientId).toMatch(/^[0-9a-f-]{36}$/);
+  expect(started!.owner).toEqual({ id: 'g-me', email: 'me@x.com' });
 
   fireEvent.click(screen.getByRole('button', { name: 'Great song' }));
   await waitFor(async () => expect((await loadCheckpoint())?.midRunNotes).toHaveLength(1));
@@ -132,4 +139,16 @@ test('the active run is checkpointed on start and on each note, and cleared on d
 
   fireEvent.click(screen.getByRole('button', { name: 'Discard this run' }));
   await waitFor(async () => expect(await loadCheckpoint()).toBeNull());
+});
+
+test('a restored run keeps the account that started it, even with someone else signed in', async () => {
+  await saveCheckpoint(checkpoint({ owner: { id: 'g-them', email: 'them@x.com' } }));
+  renderTab();
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Finish and save it' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Save this run' }));
+
+  expect(await screen.findByText('Saved on this phone, will sync when them@x.com signs in.')).toBeInTheDocument();
+  expect(mockApiFetch).not.toHaveBeenCalled();
+  expect((await listPending()).map(p => [p.clientId, p.owner])).toEqual([[CLIENT_ID, { id: 'g-them', email: 'them@x.com' }]]);
 });
