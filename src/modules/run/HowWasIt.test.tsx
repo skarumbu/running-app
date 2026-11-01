@@ -114,7 +114,8 @@ test('shows the server error and stays on the form when saving fails', async () 
 
 test('a successful save leaves nothing in the outbox', async () => {
   mockApiFetch.mockResolvedValueOnce({ ok: true, status: 201, json: () => Promise.resolve({ id: CLIENT_ID }) });
-  const onSaved = renderForm();
+  const onSaved = jest.fn();
+  renderForm(onSaved);
   fireEvent.click(screen.getByRole('button', { name: 'Save this run' }));
   await waitFor(() => expect(onSaved).toHaveBeenCalledWith(CLIENT_ID));
   expect(callbacks.onStoredLocally).toHaveBeenCalled();
@@ -123,7 +124,8 @@ test('a successful save leaves nothing in the outbox', async () => {
 
 test('an expired sign-in queues the run on the phone instead of losing it', async () => {
   mockApiFetch.mockResolvedValueOnce({ ok: false, status: 401, json: () => Promise.resolve({}) });
-  const onSaved = renderForm();
+  const onSaved = jest.fn();
+  renderForm(onSaved);
   fireEvent.click(screen.getByRole('button', { name: 'Save this run' }));
 
   expect(await screen.findByRole('status')).toHaveTextContent("Saved on this phone, will sync when you're signed in.");

@@ -46,7 +46,7 @@ test('signing in (or back in) syncs the outbox', async () => {
 test('waits while a sign-in is needed, then syncs once the new token lands', async () => {
   mockAuth = { user: { token: 'old' }, needsSignIn: true, apiFetch: mockApiFetch };
   const { rerender } = render(<AutoSync />);
-  await act(async () => {});
+  await new Promise(resolve => setTimeout(resolve, 20));
   expect(mockApiFetch).not.toHaveBeenCalled();
 
   mockAuth = { user: { token: 'new' }, needsSignIn: false, apiFetch: mockApiFetch };
