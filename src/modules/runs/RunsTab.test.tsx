@@ -77,3 +77,47 @@ test('shows an empty state when there are no runs', async () => {
   render(<RunsTab />, { wrapper: MemoryRouter });
   await waitFor(() => expect(screen.getByText(/No runs yet/)).toBeInTheDocument());
 });
+
+describe('runs waiting on this phone', () => {
+  const queued = {
+    id: '6ec0bd7f-11c0-43da-975e-2a8ad9ebae0b',
+    ended_at: '2026-11-01T08:30:00.000Z',
+    duration_seconds: 1800,
+    distance_meters: 5000,
+    waypoints: [],
+    mid_run_notes: [],
+    feel: 2 as const, body_tags: [], weather_feel: [], music: null, note: null, gear: [],
+  };
+
+  beforeEach(() => { localStorage.clear(); mockApiFetch.mockReset(); });
+  afterEach(() => localStorage.clear());
+
+  test('show as a pending card, even when the list can\'t load, and Sync now uploads them', async () => {
+    const { enqueue, listPending } = require('../../lib/outbox');
+    await enqueue(queued);
+    let online = false;
+    mockApiFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (!online) return Promise.reject(new TypeError('Failed to fetch'));
+      if (init?.method === 'POST') {
+        return Promise.resolve({ ok: true, status: 201, json: () => Promise.resolve({ id: queued.id }) } as Response);
+      }
+      return jsonResponse([{ ...feltRun, id: queued.id, route_summary: 'Synced loop' }]);
+    });
+
+    render(<MemoryRouter><RunsTab /></MemoryRouter>);
+
+    const card = await screen.findByTestId('pending-run');
+    expect(card).toHaveTextContent('Waiting to sync');
+    expect(card).toHaveTextContent('Saved on this phone');
+    expect(screen.getByText(/Couldn't load your runs/)).toBeInTheDocument();
+
+    online = true;
+    screen.getByRole('button', { name: 'Sync now' }).click();
+
+    await waitFor(() => expect(screen.queryByTestId('pending-run')).not.toBeInTheDocument());
+    expect(await screen.findByText('Synced loop')).toBeInTheDocument();
+    const post = mockApiFetch.mock.calls.find(c => c[1]?.method === 'POST');
+    expect(JSON.parse(post[1].body).id).toBe(queued.id);
+    expect(await listPending()).toEqual([]);
+  });
+});

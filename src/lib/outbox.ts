@@ -29,7 +29,14 @@ export interface PendingRun {
 
 export type SendResult =
   | { ok: true; runId: string }
-  | { ok: false; error: string; needsSignIn: boolean };
+  | {
+      ok: false;
+      error: string;
+      /** A 401 even after a silent refresh. */
+      needsSignIn: boolean;
+      /** Worth trying again later (sign-in, network, 5xx), as opposed to a request the server rejected. */
+      retryable: boolean;
+    };
 
 export type Send = (payload: RunPayload) => Promise<SendResult>;
 
@@ -104,7 +111,7 @@ export async function removePending(clientId: string): Promise<void> {
 /** Tries to upload one queued run. Success removes it; failure keeps it and records why. */
 export async function sendPending(clientId: string, send: Send): Promise<SendResult> {
   const item = (await listPending()).find(p => p.clientId === clientId);
-  if (!item) return { ok: false, error: 'Not in the outbox', needsSignIn: false };
+  if (!item) return { ok: false, error: 'Not in the outbox', needsSignIn: false, retryable: false };
   const result = await send(item.payload);
   if (result.ok) {
     await removePending(clientId);
@@ -148,12 +155,17 @@ export function postRunWith(apiFetch: (url: string, options?: RequestInit) => Pr
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
-        return { ok: false, error: (await errorFromResponse(res)).message, needsSignIn: res.status === 401 };
+        return {
+          ok: false,
+          error: (await errorFromResponse(res)).message,
+          needsSignIn: res.status === 401,
+          retryable: res.status === 401 || res.status >= 500,
+        };
       }
       const run = await res.json();
       return { ok: true, runId: run.id };
     } catch (e) {
-      return { ok: false, error: describeRequestError(e), needsSignIn: false };
+      return { ok: false, error: describeRequestError(e), needsSignIn: false, retryable: true };
     }
   };
 }

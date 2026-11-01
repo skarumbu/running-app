@@ -7,6 +7,7 @@ import { useGearList } from '../../lib/useGearList';
 import { EMPTY_MUSIC, MusicDraft, emptyRunFeelValues } from '../../components/RunFeelForm';
 import type { MidRunNoteKind } from '../../lib/feel';
 import type { MidRunNote } from '../../lib/runTypes';
+import { newClientId } from '../../lib/outbox';
 import { useCurrentWeather } from './useCurrentWeather';
 import StartPanel from './StartPanel';
 import DuringPanel, { Unit } from './DuringPanel';
@@ -18,6 +19,8 @@ type RunState = 'idle' | 'running' | 'paused' | 'saving';
 
 export default function RunTab() {
   const [phase, setPhase] = useState<RunState>('idle');
+  const [clientId, setClientId] = useState('');
+  const [endedAt, setEndedAt] = useState('');
   const [pickedGear, setPickedGear] = useState<string[]>([]);
   const [music, setMusic] = useState<MusicDraft>(EMPTY_MUSIC);
   const [midRunNotes, setMidRunNotes] = useState<MidRunNote[]>([]);
@@ -36,6 +39,7 @@ export default function RunTab() {
   const activeGear = gear?.filter(g => !g.retired) ?? null;
 
   const handleStart = () => {
+    setClientId(newClientId());
     setMidRunNotes([]);
     setPhase('running');
     gps.start();
@@ -61,6 +65,7 @@ export default function RunTab() {
     if (phase === 'running') timer.pause();
     gps.stop();
     clearRunTrackingNotification();
+    setEndedAt(new Date().toISOString());
     setPhase('saving');
   };
 
@@ -76,6 +81,8 @@ export default function RunTab() {
   if (phase === 'saving') {
     return (
       <HowWasIt
+        clientId={clientId}
+        endedAt={endedAt}
         elapsedSeconds={timer.elapsedSeconds}
         distanceMeters={gps.distanceMeters}
         waypoints={gps.waypoints}
@@ -87,7 +94,9 @@ export default function RunTab() {
         }}
         gearOptions={gear ?? []}
         weather={weather}
+        onStoredLocally={() => {}}
         onSaved={id => { resetRun(); navigate(`/runs/${id}`); }}
+        onQueuedDone={() => { resetRun(); navigate('/runs'); }}
         onDiscard={resetRun}
       />
     );

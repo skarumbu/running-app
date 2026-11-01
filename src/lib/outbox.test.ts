@@ -21,7 +21,8 @@ function payload(id: string): RunPayload {
 }
 
 const ok = (runId: string): SendResult => ({ ok: true, runId });
-const fail = (error: string, needsSignIn = false): SendResult => ({ ok: false, error, needsSignIn });
+const fail = (error: string, needsSignIn = false, retryable = true): SendResult =>
+  ({ ok: false, error, needsSignIn, retryable });
 
 beforeEach(() => localStorage.clear());
 
@@ -110,11 +111,13 @@ test('postRunWith maps responses to results', async () => {
     .mockResolvedValueOnce(json(201, { id: 'a' }))
     .mockResolvedValueOnce(json(401, {}))
     .mockResolvedValueOnce(json(500, { error: 'boom' }))
+    .mockResolvedValueOnce(json(400, { error: 'bad gear' }))
     .mockRejectedValueOnce(new TypeError('Failed to fetch'));
   const send = outbox.postRunWith(apiFetch);
   expect(await send(payload('a'))).toEqual(ok('a'));
-  expect(await send(payload('a'))).toMatchObject({ ok: false, needsSignIn: true });
+  expect(await send(payload('a'))).toMatchObject({ ok: false, needsSignIn: true, retryable: true });
   expect(await send(payload('a'))).toEqual(fail('boom'));
-  expect(await send(payload('a'))).toMatchObject({ ok: false, needsSignIn: false });
+  expect(await send(payload('a'))).toEqual(fail('bad gear', false, false));
+  expect(await send(payload('a'))).toMatchObject({ ok: false, needsSignIn: false, retryable: true });
   expect(JSON.parse(apiFetch.mock.calls[0][1].body).id).toBe('a');
 });

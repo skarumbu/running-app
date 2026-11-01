@@ -114,3 +114,18 @@
   font-weight: 700;
   letter-spacing: 0.02em;
 }
+
+/* "Sign in to sync": shown when the token couldn't be refreshed. Never blocks the app. */
+.sync-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: calc(10px + env(safe-area-inset-top)) 20px 10px;
+  background: var(--a2);
+  color: var(--on-a2);
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+.sync-banner-text { flex: 1 1 180px; }
+.sync-banner-error { flex-basis: 100%; color: var(--danger); }
