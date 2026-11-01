@@ -27,7 +27,9 @@ func start         # Requires Azure Functions Core Tools v4 + api/local.settings
 ## Architecture
 
 ### Frontend (`/src`)
-- **`AuthContext.tsx`** — Google Identity Services (GIS) client-side auth. Stores JWT in `sessionStorage`, sends it as `Authorization: Bearer` header. Calls `GET /api/users/me` on login to auto-register new users and populate context.
+- **`AuthContext.tsx`** — Google Identity Services (GIS) client-side auth. Stores JWT in `sessionStorage`, sends it as `Authorization: Bearer` header. Calls `GET /api/users/me` on login to auto-register new users and populate context. Google ID tokens last ~1 hour: `apiFetch` refreshes silently on a 401 (native plugin `refresh()`, falling back to a silent `signIn()` restore; web GIS One Tap with `auto_select`) and retries once. If that fails it sets `needsSignIn` (a "Sign in to sync" banner), **never** signs out — only the Sign out button does.
+- **`/lib/outbox.ts`** — The only owner of the on-phone run outbox (`PendingRun { clientId, payload, createdAt, attempts, lastError }`). "How was it?" enqueues first, then uploads. Synced on sign-in, on foreground (`visibilitychange`) and by "Sync now" in Runs (`/lib/useOutbox.ts`). Storage goes through `/lib/durableStore.ts`: `@capacitor/preferences` on iOS (WKWebView localStorage can be evicted), localStorage on the web.
+- **`/lib/runCheckpoint.ts`** — The run in progress on durable storage, so it survives iOS killing the app; the Run tab offers resume or finish on launch. Written on state changes and at most every 30 s from the GPS callback (no timer).
 - **`Layout.tsx`** — Bottom tab nav: Run, Runs, Gear. Sign-out lives in the Gear tab header.
 - **`/lib/feel.ts`** — The run-feel vocabulary as typed tables: the 5-level feel scale, 3-level gear comfort, body tags, weather-feel tags, mid-run notes, music kinds, gear kinds and the accent each maps to. Look words and colours up here; don't branch on values in screens. Tag keys mirror the tuples at the top of `api/function_app.py`.
 - **`/lib/runTypes.ts`** — API shapes for runs and gear.
@@ -46,7 +48,7 @@ Python Azure Functions v2. Auth via `Authorization: Bearer {google_id_token}` he
 | `/api/users/me` | GET | Get/create current user from Google identity |
 | `/api/runs` | GET | List all runs for current user (newest first) |
 | `/api/runs/bests` | GET | Aggregate stats: total runs, total km, best pace, longest run |
-| `/api/runs` | POST | Save completed run plus how it felt (feel, tags, music, mid-run notes, note, gear comfort); computes + upserts badges |
+| `/api/runs` | POST | Save completed run plus how it felt (feel, tags, music, mid-run notes, note, gear comfort); computes + upserts badges. Optional client `id` (UUID) makes it idempotent: a replay returns the stored run (200), another user's id is 409. Optional `ended_at` (ISO, within 30 days) for runs synced later |
 | `/api/runs/{id}` | GET | Single run with waypoints, feel fields, gear worn + badges earned |
 | `/api/runs/{id}` | PATCH | Edit note, feel, tags, music, mid-run notes and/or gear |
 | `/api/runs/{id}` | DELETE | Delete a run |
