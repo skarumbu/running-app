@@ -4,6 +4,14 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 // segment), not counted by the interval. The interval only refreshes the
 // display, and only while the page is visible: no once-a-second re-render
 // with the screen locked. Coming back to the app recomputes immediately.
+
+/** Enough to rebuild the timer after the app is killed: banked time plus the open segment's start. */
+export interface TimerSnapshot {
+  accumulatedMs: number;
+  /** Epoch ms the current running segment began; null while paused. */
+  segmentStartedAt: number | null;
+}
+
 export function useRunTimer() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [running, setRunning] = useState(false);
@@ -40,6 +48,19 @@ export function useRunTimer() {
     setElapsedSeconds(0);
   }, []);
 
+  const snapshot = useCallback((): TimerSnapshot => ({
+    accumulatedMs: accumulatedMsRef.current,
+    segmentStartedAt: runningRef.current ? startTimeRef.current : null,
+  }), []);
+
+  const restore = useCallback((s: TimerSnapshot) => {
+    accumulatedMsRef.current = s.accumulatedMs;
+    runningRef.current = s.segmentStartedAt !== null;
+    if (s.segmentStartedAt !== null) startTimeRef.current = s.segmentStartedAt;
+    setRunning(runningRef.current);
+    setElapsedSeconds(compute());
+  }, [compute]);
+
   useEffect(() => {
     if (!running) return;
     let interval: ReturnType<typeof setInterval> | null = null;
@@ -58,5 +79,5 @@ export function useRunTimer() {
     };
   }, [running, compute]);
 
-  return { elapsedSeconds, running, start, pause, resume, reset };
+  return { elapsedSeconds, running, start, pause, resume, reset, snapshot, restore };
 }

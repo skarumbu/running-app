@@ -14,3 +14,8 @@ if (typeof (global as any).TextEncoder === 'undefined') {
 if (typeof (global as any).TextDecoder === 'undefined') {
   (global as any).TextDecoder = TextDecoder;
 }
+
+// jsdom has no Web Crypto; the run outbox uses it for client run ids.
+if (!(globalThis as any).crypto) {
+  Object.defineProperty(globalThis, 'crypto', { value: require('crypto').webcrypto, configurable: true });
+}

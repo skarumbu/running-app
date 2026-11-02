@@ -5,6 +5,7 @@ import ssl
 import time
 import logging
 import urllib.request
+import uuid
 from urllib.parse import urlparse
 from datetime import datetime, timezone, timedelta
 
@@ -318,6 +319,37 @@ def _run_gear(value):
     return items
 
 
+def parse_client_run_id(value):
+    """The optional client-generated run id, normalised; None when absent.
+    Clients send it so a retried save lands on the same row."""
+    if value is None:
+        return None
+    try:
+        return str(uuid.UUID(str(value)))
+    except ValueError:
+        raise ValidationError("id must be a UUID")
+
+
+# A queued run can sync hours after it ended; trust the phone's clock for when,
+# within reason, so started_at and the weather lookup aren't stamped "now".
+MAX_RUN_AGE = timedelta(days=30)
+MAX_CLOCK_SKEW = timedelta(minutes=5)
+
+
+def parse_client_ended_at(value, now):
+    if value is None:
+        return now
+    try:
+        ended_at = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        raise ValidationError("ended_at must be an ISO 8601 timestamp")
+    if ended_at.tzinfo is None:
+        raise ValidationError("ended_at must include a timezone")
+    if ended_at > now + MAX_CLOCK_SKEW or ended_at < now - MAX_RUN_AGE:
+        raise ValidationError("ended_at is out of range")
+    return min(ended_at, now)
+
+
 def parse_run_feel_fields(body):
     """Validate the run-feel fields present in a POST/PATCH body.
 
@@ -550,8 +582,11 @@ def create_run(req: func.HttpRequest) -> func.HttpResponse:
         return err("Invalid JSON")
     if not isinstance(body, dict):
         return err("Invalid JSON")
+    now = datetime.now(timezone.utc)
     try:
         feel_fields = parse_run_feel_fields(body)
+        client_run_id = parse_client_run_id(body.get("id"))
+        ended_at = parse_client_ended_at(body.get("ended_at"), now)
     except ValidationError as e:
         return err(str(e))
     gear_items = feel_fields.get("gear", [])
@@ -561,8 +596,7 @@ def create_run(req: func.HttpRequest) -> func.HttpResponse:
     if distance <= 0 or duration <= 0:
         return err("distance_meters and duration_seconds required")
     avg_pace = duration / (distance / 1000) if distance > 0 else None
-    now = datetime.now(timezone.utc)
-    started_at = now - timedelta(seconds=duration)
+    started_at = ended_at - timedelta(seconds=duration)
 
     weather_data = None
     route_summary = "Run"
@@ -593,15 +627,35 @@ def create_run(req: func.HttpRequest) -> func.HttpResponse:
         cur.execute(
             "INSERT INTO runs (user_id, started_at, ended_at, distance_meters, duration_seconds, "
             "avg_pace_seconds_per_km, name, waypoints, weather_json, route_summary, route_thumbnail, "
-            "note, feel, body_tags, weather_feel, music, mid_run_notes) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::text[], %s::text[], %s, %s) RETURNING *",
-            (user["id"], started_at, now, distance, duration, avg_pace, route_summary, json.dumps(waypoints),
+            "note, feel, body_tags, weather_feel, music, mid_run_notes, id) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::text[], %s::text[], %s, %s, "
+            "COALESCE(%s::uuid, gen_random_uuid())) ON CONFLICT (id) DO NOTHING RETURNING *",
+            (user["id"], started_at, ended_at, distance, duration, avg_pace, route_summary, json.dumps(waypoints),
              json.dumps(weather_data) if weather_data else None, route_summary, json.dumps(route_thumbnail),
              feel_fields.get("note"), feel_fields.get("feel"), feel_fields.get("body_tags", []),
              feel_fields.get("weather_feel", []), json.dumps(music) if music else None,
-             json.dumps(feel_fields.get("mid_run_notes", []))),
+             json.dumps(feel_fields.get("mid_run_notes", [])), client_run_id),
         )
         run = _row(cur, cur.fetchone())
+        if run is None:
+            # The id already exists: a retried save. Hand back what's stored,
+            # but only to the user who saved it.
+            cur.execute(f"SELECT *, {RUN_GEAR_JSON} FROM runs WHERE id = %s", (client_run_id,))
+            existing = _row(cur, cur.fetchone())
+            if existing is None or str(existing["user_id"]) != str(user["id"]):
+                cur.close()
+                conn.close()
+                return err("That run id is already in use", 409)
+            cur.close()
+            # Badges are upserted after the run commits; redo them in case the
+            # first attempt died in between. ON CONFLICT DO NOTHING keeps it idempotent.
+            compute_and_upsert_badges(conn, user["id"], existing["id"], existing["distance_meters"])
+            cur = conn.cursor()
+            cur.execute("SELECT badge_type FROM badges WHERE run_id = %s", (existing["id"],))
+            existing["badges_earned"] = [r[0] for r in cur.fetchall()]
+            cur.close()
+            conn.close()
+            return json_response(_normalize_run(existing))
         if gear_items:
             _replace_run_gear(cur, run["id"], gear_items)
         conn.commit()

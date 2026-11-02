@@ -47,7 +47,8 @@ function haversineMeters(a: Waypoint, b: Waypoint): number {
   return R * 2 * Math.atan2(Math.sqrt(a2), Math.sqrt(1 - a2));
 }
 
-export function useGPS() {
+/** `onRecord` runs after each stored waypoint, without a re-render (used to checkpoint the run). */
+export function useGPS({ onRecord }: { onRecord?: () => void } = {}) {
   const [state, setState] = useState<GPSState>({
     waypoints: [],
     distanceMeters: 0,
@@ -61,6 +62,8 @@ export function useGPS() {
   const waypointsRef = useRef<Waypoint[]>([]);
   const distanceRef = useRef(0);
   const coordsRef = useRef<GeolocationCoordinates | null>(null);
+  const onRecordRef = useRef(onRecord);
+  onRecordRef.current = onRecord;
 
   // Push the refs into React state. Skipped while the app is backgrounded
   // (screen locked) so location callbacks don't re-render the map nobody can
@@ -96,6 +99,7 @@ export function useGPS() {
     coordsRef.current = coords;
 
     if (!isHidden()) flush();
+    onRecordRef.current?.();
   }, [flush]);
 
   const start = useCallback(() => {
@@ -180,5 +184,15 @@ export function useGPS() {
     });
   }, [stop]);
 
-  return { ...state, start, stop, reset };
+  /** The route so far, straight from the refs (current even while backgrounded). */
+  const snapshot = useCallback(() => ({ waypoints: waypointsRef.current, distanceMeters: distanceRef.current }), []);
+
+  /** Picks a restored run back up; new fixes continue from the last point. */
+  const restore = useCallback((waypoints: Waypoint[], distanceMeters: number) => {
+    waypointsRef.current = waypoints;
+    distanceRef.current = distanceMeters;
+    setState(s => ({ ...s, waypoints, distanceMeters }));
+  }, []);
+
+  return { ...state, start, stop, reset, snapshot, restore };
 }

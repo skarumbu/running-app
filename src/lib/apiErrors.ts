@@ -1,7 +1,7 @@
 /** Turns a non-ok API response into an Error carrying the server's message. */
 export async function errorFromResponse(res: Response): Promise<Error> {
   if (res.status === 401) {
-    return new Error('Your session expired — sign out and sign in again, then try again.');
+    return new Error('Your sign-in expired. Sign in again to sync.');
   }
   let message = `Unexpected error (${res.status})`;
   try {
